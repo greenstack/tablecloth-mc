@@ -32,9 +32,6 @@
 
 # Subcommands:
 #
-# help
-#  Lets you know more about the program.
-#
 # addmod [name] --url=[url] [--version=[version]]
 #		Registers a mod for use. It doesn't perform the download, however. Run the
 #		tablecloth serve-up command.
@@ -70,12 +67,6 @@ CONFIG_FABRIC_LOADER_VERSION = "loader-version"
 CONFIG_FABRIC_INSTALLER_VERSION = "installer-version"
 CONFIG_SERVER_JAR_NAME = "jar-name"
 
-def describeMeIfNoArgs(argv, aboutMe):
-	if (len(argv) == 0):
-		aboutMe()
-		return True
-	return False
-
 def getDefaultConfig() -> dict:
 	return {
 		"mods": {},
@@ -102,57 +93,39 @@ def getConfig() -> dict:
 		config = json.load(openFile)
 		return config
 
+# ============================argument parser setup=============================
 argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
 subparsers = argparser.add_subparsers()
 
-	
-
-
-
-	
-
 # ================================addmod command================================
 def registerMod(argv) -> int:
-	def aboutMe():
-		print("removemod")
-	if (describeMeIfNoArgs(argv, aboutMe)): return 0
-	
 	print("Registering mod...")
 	
 	exit(0)
 
 # ===============================cleanup command================================
 def cleanup(argv) -> int:
-	def aboutMe():
-		print("cleanup")
-	if (describeMeIfNoArgs(argv, aboutMe)): return 0
-	
 	print("cleaning up...")
 	
 	exit(0)
 
 # ==============================removemod command===============================
 def unregisterMod(argv) -> int:
-	def aboutMe():
-		print("removemod")
-	if (describeMeIfNoArgs(argv, aboutMe)): return 0
-
 	print("Unregistering mod...")
 	
 	exit(0)
 
 # ==============================setmodver command===============================
 def setModVersion(argv) -> int:
-	def aboutMe():
-		print("setmodver")
-	if (describeMeIfNoArgs(argv, aboutMe)): return 0
-
 	print("Setting mod version")
 	
 	exit(0)
 
 # ===============================serve-up command===============================
-serve_up_subparser = subparsers.add_parser('serve-up', description="Download the server jar and mods")
+serve_up_subparser = subparsers.add_parser(
+	'serve-up',
+	description="Download the server jar and mods"
+)
 
 def performUpdate(args) -> int:	
 	config = getConfig()
@@ -220,7 +193,6 @@ def main():
 
 	args = argparser.parse_args()
 	args.func(args)
-
 
 if __name__ == "__main__":
 	main()

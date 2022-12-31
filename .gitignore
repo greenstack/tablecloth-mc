@@ -1,0 +1,19 @@
+# Ignore everything related to Fabric and Minecraft
+.fabric
+libraries/
+logs/
+mods/
+versions/
+world/
+banned-ips.json
+banned-players.json
+eula.txt
+fabricloader.log
+ops.json
+*.jar
+server.properties
+usercache.json
+whitelist.json
+
+# Ignore tablecloth.json - this is always going to be very user-specific
+tablecloth.json

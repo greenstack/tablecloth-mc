@@ -42,6 +42,10 @@
 # cleanup
 #		Checks for mods that have been removed and deletes them.
 #
+# config-versions [--minecraft=[versionId]] [--fabric-loader=[versionId]]
+#									[--fabric-launcher=[versionId]]
+#		Sets the version of the component that Tablecloth should search for.
+#
 # fabric [--loader=[version]] [--installer=[version]]
 #		Sets the version for the fabric loader and installer. At least one of these
 #		arguments is required.
@@ -54,14 +58,16 @@
 #		Downloads registered mods and updates Minecraft and Fabric.
 #
 # setmodver [name] --url=[url] [--version=[version]]
-#
-# update-mc --version=[versionId]
-#		Updates the url from which the Minecraft server jar will be obtained.
+#		Sets the version of the mod to look for.
+
 
 import getopt
 import json
+import os
 import requests
 import sys
+
+TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
 
 def describeMeIfNoArgs(argv, aboutMe):
 	if (len(argv) == 0):
@@ -69,10 +75,28 @@ def describeMeIfNoArgs(argv, aboutMe):
 		return True
 	return False
 
+def getDefaultConfig() -> dict:
+	return {
+		"mods": {},
+		"minecraft-version": "1.19.3",
+		"fabric": {
+			"loader-version": "0.14.12",
+			"installer-version": "0.11.1"
+		},
+		"jarName": None
+	}
+
 def getConfig() -> dict:
-	with open('tablecloth.json', 'r') as openFile:
-		json_object = json.load(openFile)
-		return json_object
+	if (not os.path.exists(TABLECLOTH_CONFIG_PATH)):
+		config = getDefaultConfig()
+		# Write the default tablecloth.json file
+		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
+			json.dump(config, configFile)
+		return config
+
+	with open(TABLECLOTH_CONFIG_PATH, 'r') as openFile:
+		config = json.load(openFile)
+		return config
 
 # ================================about command=================================
 def about() -> int:
@@ -81,7 +105,7 @@ def about() -> int:
 	cleanup([])
 	unregisterMod([])
 	performUpdate([])
-	updateMinecraft([])
+	configVersions([])
 	exit(0)
 
 # ================================addmod command================================
@@ -132,15 +156,6 @@ def performUpdate(argv) -> int:
 
 	if (describeMeIfNoArgs(argv, aboutMe)): return 0
 	
-	print("Updating server")
-	
-	exit(0)
-
-# ==============================update-mc command===============================
-def updateMinecraft(argv) -> int:
-	def aboutMe():
-		print("update-mc")
-
 	config = getConfig()
 	
 	mcVer = config.get("minecraft-version")
@@ -163,6 +178,17 @@ def updateMinecraft(argv) -> int:
 	open(serverJarName, 'wb').write(serverJar)
 
 	print("Server jar created. You will need to manually change its permissions, owner, group, etc. manually.")
+	
+	exit(0)
+
+# ===========================config-versions command============================
+def configVersions(argv) -> int:
+	def aboutMe():
+		print("update-mc")
+
+	config = getConfig()
+	
+	opts, args = getopt.getopt(argv, "minecraft:fabric-loader:fabric-installer")
 
 	exit(0)
 
@@ -179,14 +205,14 @@ def main():
 		"removemod": unregisterMod,
 		"setmodver": setModVersion,
 		"serve-up": performUpdate,
-		"update-mc": updateMinecraft,
+		"config-versions": configVersions,
 		"help": about,
 	}
 
 	command = switcher.get(mainArg, about)
 	command(argv)
 
-	#opts, args = getopt.getopt(argv, "addMod:y:")
+	
 	
 
 if __name__ == "__main__":

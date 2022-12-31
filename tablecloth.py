@@ -46,10 +46,6 @@
 #									[--fabric-launcher=[versionId]]
 #		Sets the version of the component that Tablecloth should search for.
 #
-# fabric [--loader=[version]] [--installer=[version]]
-#		Sets the version for the fabric loader and installer. At least one of these
-#		arguments is required.
-#
 # removemod [name]
 #		Unregisters a mod for use. It doesn't perform the removal, however. Run
 #		tablecloth cleanup to do that.
@@ -61,13 +57,18 @@
 #		Sets the version of the mod to look for.
 
 
-import getopt
+import argparse
 import json
 import os
 import requests
 import sys
 
 TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
+CONFIG_MINECRAFT_VERSION = "minecraft-version"
+CONFIG_FABRIC = "fabric"
+CONFIG_FABRIC_LOADER_VERSION = "loader-version"
+CONFIG_FABRIC_INSTALLER_VERSION = "installer-version"
+CONFIG_SERVER_JAR_NAME = "jar-name"
 
 def describeMeIfNoArgs(argv, aboutMe):
 	if (len(argv) == 0):
@@ -83,30 +84,32 @@ def getDefaultConfig() -> dict:
 			"loader-version": "0.14.12",
 			"installer-version": "0.11.1"
 		},
-		"jarName": None
+		"jar-name": None
 	}
+
+def dumpConfig(config: dict) -> None:
+	with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
+		json.dump(config, configFile)
 
 def getConfig() -> dict:
 	if (not os.path.exists(TABLECLOTH_CONFIG_PATH)):
 		config = getDefaultConfig()
 		# Write the default tablecloth.json file
-		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
-			json.dump(config, configFile)
+		dumpConfig(config)
 		return config
 
 	with open(TABLECLOTH_CONFIG_PATH, 'r') as openFile:
 		config = json.load(openFile)
 		return config
 
-# ================================about command=================================
-def about() -> int:
-	print("About Tablecloth")
-	registerMod([])
-	cleanup([])
-	unregisterMod([])
-	performUpdate([])
-	configVersions([])
-	exit(0)
+argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
+subparsers = argparser.add_subparsers()
+
+	
+
+
+
+	
 
 # ================================addmod command================================
 def registerMod(argv) -> int:
@@ -149,13 +152,9 @@ def setModVersion(argv) -> int:
 	exit(0)
 
 # ===============================serve-up command===============================
-def performUpdate(argv) -> int:
+serve_up_subparser = subparsers.add_parser('serve-up', description="Download the server jar and mods")
 
-	def aboutMe():
-		print("serve-up: downloads registers mods and updates minecraft and fabric (if needed)")
-
-	if (describeMeIfNoArgs(argv, aboutMe)): return 0
-	
+def performUpdate(args) -> int:	
 	config = getConfig()
 	
 	mcVer = config.get("minecraft-version")
@@ -165,8 +164,8 @@ def performUpdate(argv) -> int:
 
 	installerUrl = "https://meta.fabricmc.net/v2/versions/loader/{}/{}/{}/server/jar".format(mcVer, loaderVer, installerVer)
 	
-	if (config.get("jarName")):
-		serverJarName = config.get("jarName")
+	if (config.get(CONFIG_SERVER_JAR_NAME)):
+		serverJarName = config.get(CONFIG_SERVER_JAR_NAME)
 	else:
 		serverJarName = "fabric-server-mc.{}-loader.{}-launcher.{}.jar".format(mcVer, loaderVer, installerVer)
 
@@ -177,43 +176,51 @@ def performUpdate(argv) -> int:
 	serverJar = requests.get(installerUrl).content
 	open(serverJarName, 'wb').write(serverJar)
 
-	print("Server jar created. You will need to manually change its permissions, owner, group, etc. manually.")
+	print("Server jar created. You will need to manually change its properties.")
 	
 	exit(0)
+
+serve_up_subparser.set_defaults(func=performUpdate)
 
 # ===========================config-versions command============================
-def configVersions(argv) -> int:
-	def aboutMe():
-		print("update-mc")
+config_versions_subparser = subparsers.add_parser(
+		"config-version",
+		aliases=['cv'],
+		description="Configure the versions of Minecraft and the Fabric components"
+)
+config_versions_subparser.add_argument('--minecraft', metavar="[Minecraft Version]", type=str, help="The desired Minecraft version")
+config_versions_subparser.add_argument('--fabric-loader', metavar="[Loader Version]", type=str, help="The version of the Fabric loader to use")
+config_versions_subparser.add_argument('--fabric-installer', metavar="[Installer Version]", type=str, help="The version of the Fabric installer to use")
+
+def configVersions(args) -> int:
+	if not (args.minecraft or args.fabric_loader or args.fabric_installer):
+		config_versions_subparser.parse_args(['-h'])
+		#print("Must define a version for either --minecraft, --fabric-loader, or --fabric-installer")
+		exit(1)
 
 	config = getConfig()
-	
-	opts, args = getopt.getopt(argv, "minecraft:fabric-loader:fabric-installer")
+	if (args.minecraft):
+		config[CONFIG_MINECRAFT_VERSION] = args.minecraft
+	if (args.fabric_loader):
+		config[CONFIG_FABRIC][CONFIG_FABRIC_LOADER_VERSION] = args.fabric_loader
+	if (args.fabric_installer):
+		config[CONFIG_FABRIC][CONFIG_FABRIC_INSTALLER_VERSION] = args.fabric_installer
+
+	dumpConfig(config)
 
 	exit(0)
+
+config_versions_subparser.set_defaults(func=configVersions)
 
 # ================================main function=================================
 def main():
 	if (len(sys.argv) == 1):
-		return about()
+		argparser.parse_args(['-h'])
+		return
 
-	mainArg = sys.argv[1]
-	argv = sys.argv[2:]
-	switcher = {
-		"addmod": registerMod,
-		"cleanup": cleanup,
-		"removemod": unregisterMod,
-		"setmodver": setModVersion,
-		"serve-up": performUpdate,
-		"config-versions": configVersions,
-		"help": about,
-	}
+	args = argparser.parse_args()
+	args.func(args)
 
-	command = switcher.get(mainArg, about)
-	command(argv)
-
-	
-	
 
 if __name__ == "__main__":
 	main()

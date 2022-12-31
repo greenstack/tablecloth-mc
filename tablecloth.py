@@ -32,7 +32,7 @@
 
 # Subcommands:
 #
-# addmod [name] --url=[url] [--version=[version]]
+# addmod [name] [version]
 #		Registers a mod for use. It doesn't perform the download, however. Run the
 #		tablecloth serve-up command.
 #
@@ -61,21 +61,25 @@ import requests
 import sys
 
 TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
+CONFIG_MODS = "mods"
 CONFIG_MINECRAFT_VERSION = "minecraft-version"
 CONFIG_FABRIC = "fabric"
 CONFIG_FABRIC_LOADER_VERSION = "loader-version"
 CONFIG_FABRIC_INSTALLER_VERSION = "installer-version"
 CONFIG_SERVER_JAR_NAME = "jar-name"
+MODRINTH_API_BASE = "https://api.modrinth.com/v2/"
+MODRINTH_PROJECT_API = MODRINTH_API_BASE + "project/{}"
+MODRINTH_VERSION_API = MODRINTH_API_BASE + "project/{}/version"
 
 def getDefaultConfig() -> dict:
 	return {
-		"mods": {},
-		"minecraft-version": "1.19.3",
-		"fabric": {
-			"loader-version": "0.14.12",
-			"installer-version": "0.11.1"
+		CONFIG_SERVER_JAR_NAME: None,
+		CONFIG_MINECRAFT_VERSION: "1.19.3",
+		CONFIG_FABRIC: {
+			CONFIG_FABRIC_LOADER_VERSION: "0.14.12",
+			CONFIG_FABRIC_INSTALLER_VERSION: "0.11.1",
 		},
-		"jar-name": None
+		CONFIG_MODS: [],
 	}
 
 def dumpConfig(config: dict) -> None:
@@ -98,10 +102,94 @@ argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minec
 subparsers = argparser.add_subparsers()
 
 # ================================addmod command================================
+register_mod_parser = subparsers.add_parser(
+	"add-mod",
+	description="Register a mod to be downloaded",
+	aliases=['am']
+)
+register_mod_parser.add_argument("name", type=str, help="The name of the mod")
+register_mod_parser.add_argument("version", type=str, help="The version of the mod to download")
+
 def registerMod(argv) -> int:
-	print("Registering mod...")
+	if not len(sys.argv) > 2:
+		register_mod_parser.parse_args(['-h'])
+		return
+	print("Searching for {} version {}".format(argv.name, argv.version))
+
+	projectData = requests.get(MODRINTH_PROJECT_API.format(argv.name))
+	if not projectData.status_code == 200:
+		print("Could not retrieve project {}: HTTP {}".format(argv.name, projectData.status_code))
+		exit(projectData.status_code)
+
+	projectDataJson = projectData.json()
+
+	print("Found {} (project id {}) on Modrinth".format(argv.name, projectDataJson["id"]))
 	
+	# 1. GET /project/slug/version (be sure to put the minecraft-version in the 
+	# 		query to get only versions that we can run and that loaders is set to fabric)
+	# 2. Iterate over them. Check if version_number is the same
+	# 3. Iterate over each version's game_versions to make sure it matches
+	# 4. If it does, then go to that version's files key.
+	# 5. In that version's files key, iterate over the array. Try to find the
+	#			primary file (key: "primary"; it will be true) and get the url; if it's
+	#			the only one, use that.
+	
+	config = getConfig()
+
+	versionResponse = requests.get(MODRINTH_VERSION_API.format(argv.name),
+		params = {
+			"loaders": ["fabric"],
+			"game_versions": [config[CONFIG_MINECRAFT_VERSION]],
+		}
+	)
+	if (not versionResponse.status_code == 200):
+		print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
+		exit(versionResponse.status_code)
+
+	versionData = versionResponse.json()
+	
+	if len(versionData) == 1:
+		version = versionData[0]
+	else:
+		for versionInfo in versionData:
+			if versionInfo["version_number"] == argv.version:
+				version = versionInfo
+				break
+
+	print("Found version {} for the mod!".format(argv.version))
+	
+	for file in version["files"]:
+		if file["primary"]:
+			versionFile = file
+		else:
+			versionFile = file
+
+	mod = {
+		"name": argv.name,
+		"version": argv.version,
+		"modrinth":
+		{
+			"project-id": projectDataJson["id"],
+			"version-id": version["id"], # Helps us keep it in place
+			"download-url": versionFile["url"], # Gives us a link to the place
+			"filename": versionFile["filename"],
+			"hashes": { # Will let us know during serve-up if we need to download or not
+				"sha512": versionFile["hashes"]["sha512"],
+				"sha1": versionFile["hashes"]["sha1"],
+			}
+		}
+	}
+
+	# TODO: Make sure mod isn't already here
+	# TODO: Make the mod name the key so we don't have to worry about redundant
+	# additions. Should make mods easier to unregister as well.
+	config[CONFIG_MODS].append(mod)
+	dumpConfig(config)
+	print("Registered {}. Run `tablecloth serve-up` to download it.")
+
 	exit(0)
+
+register_mod_parser.set_defaults(func=registerMod)
 
 # ===============================cleanup command================================
 def cleanup(argv) -> int:
@@ -126,6 +214,8 @@ serve_up_subparser = subparsers.add_parser(
 	'serve-up',
 	description="Download the server jar and mods"
 )
+#TODO: Add a --clean param that cleans the mods folder before doing the download
+#TODO: Add a --dry-run param that will show the user what this command will do
 
 def performUpdate(args) -> int:	
 	config = getConfig()
@@ -151,6 +241,10 @@ def performUpdate(args) -> int:
 
 	print("Server jar created. You will need to manually change its properties.")
 	
+	# To get the mods, we need:
+	# 1. The mod's Modrinth ID.
+	# 2. The mod's version ID.
+
 	exit(0)
 
 serve_up_subparser.set_defaults(func=performUpdate)
@@ -166,7 +260,7 @@ config_versions_subparser.add_argument('--fabric-loader', metavar="[Loader Versi
 config_versions_subparser.add_argument('--fabric-installer', metavar="[Installer Version]", type=str, help="The version of the Fabric installer to use")
 
 def configVersions(args) -> int:
-	if not (args.minecraft or args.fabric_loader or args.fabric_installer):
+	if not len(sys.argv) > 2:
 		config_versions_subparser.parse_args(['-h'])
 		#print("Must define a version for either --minecraft, --fabric-loader, or --fabric-installer")
 		exit(1)
@@ -174,10 +268,13 @@ def configVersions(args) -> int:
 	config = getConfig()
 	if (args.minecraft):
 		config[CONFIG_MINECRAFT_VERSION] = args.minecraft
+		print("Set Minecraft version to " + args.minecraft)
 	if (args.fabric_loader):
 		config[CONFIG_FABRIC][CONFIG_FABRIC_LOADER_VERSION] = args.fabric_loader
+		print("Set Fabric loader version to" + args.fabric_loader)
 	if (args.fabric_installer):
 		config[CONFIG_FABRIC][CONFIG_FABRIC_INSTALLER_VERSION] = args.fabric_installer
+		print("Set Fabric installer version to " + args.fabric_installer)
 
 	dumpConfig(config)
 

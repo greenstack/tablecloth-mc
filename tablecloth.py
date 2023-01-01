@@ -115,8 +115,11 @@ init_subparser = subparsers.add_parser(
 	description="Initialize Tablecloth with the default settings"
 )
 def init(argv) -> int:
+	if os.path.exists(TABLECLOTH_CONFIG_PATH):
+		print(TABLECLOTH_CONFIG_PATH + " already exists.")
+		exit(1)
 	print("Creating original config")
-	dumpConfig(getConfig())
+	dumpConfig(getDefaultConfig())
 	print("Created config file ({})".format(TABLECLOTH_CONFIG_PATH))
 init_subparser.set_defaults(func=init)
 

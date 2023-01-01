@@ -76,7 +76,7 @@ def getDefaultConfig() -> dict:
 			CONFIG_FABRIC_LOADER_VERSION: "0.14.12",
 			CONFIG_FABRIC_INSTALLER_VERSION: "0.11.1",
 		},
-		CONFIG_MODS: [],
+		CONFIG_MODS: {},
 	}
 
 def dumpConfig(config: dict) -> None:

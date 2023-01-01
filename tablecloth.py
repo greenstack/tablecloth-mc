@@ -25,10 +25,7 @@
 # ==============================================================================
 
 # Tablecloth is a software designed to automatically upgrade Minecraft servers
-# that have been modded with Fabric from the CLI. To help with this, you can
-# (and should!) register mods using this script.
-
-# TODO: Have Tablecloth use the Modrinth API to download the mods.
+# that have been modded with Fabric from the CLI.
 
 # Subcommands:
 #
@@ -183,7 +180,7 @@ def registerMod(argv) -> int:
 	# TODO: Make sure mod isn't already here
 	# TODO: Make the mod name the key so we don't have to worry about redundant
 	# additions. Should make mods easier to unregister as well.
-	config[CONFIG_MODS].append(mod)
+	config[CONFIG_MODS][argv.name] = mod
 	dumpConfig(config)
 	print("Registered {}. Run `tablecloth serve-up` to download it.")
 
@@ -255,9 +252,19 @@ def performUpdate(args) -> int:
 
 	print("Server jar created. You will need to manually change its properties.")
 	
-	# To get the mods, we need:
-	# 1. The mod's Modrinth ID.
-	# 2. The mod's version ID.
+	if not os.path.exists("mods"):
+		os.mkdir("mods")
+
+	print("Installing mods...")
+	for mod in config.get(CONFIG_MODS).values():
+		print("Downloading {} version {}".format(mod["name"], mod["version"]))
+		serverJarResponse = requests.get(mod["modrinth"]["download-url"])
+		if not serverJarResponse.status_code == 200:
+			print("Could not download the mod (HTTP {})".format(serverJarResponse.status_code))
+			continue
+		path = "mods/" + mod["modrinth"]["filename"]
+		open(path, 'wb').write(serverJarResponse.content)
+		print("Mod saved to " + path)
 
 	exit(0)
 

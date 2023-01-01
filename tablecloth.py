@@ -109,6 +109,17 @@ def cleanup(argv) -> int:
 	
 	exit(0)
 
+# =================================init command=================================
+init_subparser = subparsers.add_parser(
+	'init',
+	description="Initialize Tablecloth with the default settings"
+)
+def init(argv) -> int:
+	print("Creating original config")
+	dumpConfig(getConfig())
+	print("Created config file ({})".format(TABLECLOTH_CONFIG_PATH))
+init_subparser.set_defaults(func=init)
+
 # ==============================removemod command===============================
 def unregisterMod(argv) -> int:
 	print("Unregistering mod...")

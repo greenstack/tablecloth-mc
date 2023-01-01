@@ -19,5 +19,12 @@ After you run Tablecloth for the first time, it will create a file called
 edit it yourself or you can use Tablecloth to manage it as well. _**NOTE** that
 this functionality is still forthcoming._
 
+# Subcommands
+## config-version
+Configure the versions of Minecraft and the Fabric components
+
+## serve-up
+Download the server jar and mods
+
 # License
 Tablecloth MC is published under the MIT License.

@@ -98,14 +98,65 @@ def getConfig() -> dict:
 argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
 subparsers = argparser.add_subparsers()
 
+# ==============================setmodver command===============================
+def setModVersion(argv) -> int:
+	print("Setting mod version")
+
+# ================================mod subcommand================================
+mod_subparser = subparsers.add_parser(
+	'mod',
+	description="Perform various operations on mod config."
+)
+mod_subparsers = mod_subparser.add_subparsers()
+
+mod_add_subparser = mod_subparsers.add_parser(
+	'add',
+	description="Register a mod to be downloaded."
+)
+mod_add_subparser.add_argument("name", type=str, help="The name of the mod")
+mod_add_subparser.add_argument("version", type=str, help="The version of the mod to register")
+
+mod_add_subparser.add_argument('--download', help="Specify this flag if you want to immediately download the mod")
+
 # ================================addmod command================================
 register_mod_parser = subparsers.add_parser(
 	"add-mod",
-	description="Register a mod to be downloaded",
+	description="Register a mod to be downloaded [DEPRECATED. Use tablecloth mod add instead.]",
 	aliases=['am']
 )
 register_mod_parser.add_argument("name", type=str, help="The name of the mod")
 register_mod_parser.add_argument("version", type=str, help="The version of the mod to download")
+
+def findMod(modName: str) -> dict:
+	projectRequest = requests.get(MODRINTH_PROJECT_API.format(modName))
+	if not projectRequest.status_code == 200:
+		print("Could not retrieve project {}: HTTP {}".format(modName, projectRequest.status_code))
+		exit(projectRequest.status_code)
+	return projectRequest.json()
+
+def findModVersion(modName: str, modVersion: str) -> dict:
+	config = getConfig()
+
+	versionResponse = requests.get(MODRINTH_VERSION_API.format(modName),
+		params = {
+			"loaders": ["fabric"],
+			"game_versions": [config[CONFIG_MINECRAFT_VERSION]],
+		}
+	)
+	if (not versionResponse.status_code == 200):
+		print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
+		exit(versionResponse.status_code)
+	
+	versionData = versionResponse.json()
+	
+	if len(versionData) == 1:
+		version = versionData[0]
+	else:
+		for versionInfo in versionData:
+			if versionInfo["version_number"] == modVersion:
+				version = versionInfo
+				break
+	return version
 
 def registerMod(argv) -> int:
 	if not len(sys.argv) > 2:
@@ -113,12 +164,7 @@ def registerMod(argv) -> int:
 		return
 	print("Searching for {} version {}".format(argv.name, argv.version))
 
-	projectData = requests.get(MODRINTH_PROJECT_API.format(argv.name))
-	if not projectData.status_code == 200:
-		print("Could not retrieve project {}: HTTP {}".format(argv.name, projectData.status_code))
-		exit(projectData.status_code)
-
-	projectDataJson = projectData.json()
+	projectDataJson = findMod(argv.name)
 
 	print("Found {} (project id {}) on Modrinth".format(argv.name, projectDataJson["id"]))
 	
@@ -133,25 +179,7 @@ def registerMod(argv) -> int:
 	
 	config = getConfig()
 
-	versionResponse = requests.get(MODRINTH_VERSION_API.format(argv.name),
-		params = {
-			"loaders": ["fabric"],
-			"game_versions": [config[CONFIG_MINECRAFT_VERSION]],
-		}
-	)
-	if (not versionResponse.status_code == 200):
-		print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
-		exit(versionResponse.status_code)
-
-	versionData = versionResponse.json()
-	
-	if len(versionData) == 1:
-		version = versionData[0]
-	else:
-		for versionInfo in versionData:
-			if versionInfo["version_number"] == argv.version:
-				version = versionInfo
-				break
+	version = findModVersion(argv.name, argv.version)
 
 	print("Found version {} for the mod!".format(argv.version))
 	
@@ -186,7 +214,17 @@ def registerMod(argv) -> int:
 
 	exit(0)
 
-register_mod_parser.set_defaults(func=registerMod)
+mod_add_subparser.set_defaults(func=registerMod)
+
+def registerMod_DEPRECATED(argv):
+	print("WARNING: The add-mod command is deprecated. Use mod add instead.")
+	registerMod(argv)
+
+register_mod_parser.set_defaults(func=registerMod_DEPRECATED)
+
+# =============================mod remove command===============================
+def unregisterMod(argv) -> int:
+	print("Unregistering mod...")
 
 # ===============================cleanup command================================
 def cleanup(argv) -> int:
@@ -207,18 +245,6 @@ def init(argv) -> int:
 	dumpConfig(getDefaultConfig())
 	print("Created config file ({})".format(TABLECLOTH_CONFIG_PATH))
 init_subparser.set_defaults(func=init)
-
-# ==============================removemod command===============================
-def unregisterMod(argv) -> int:
-	print("Unregistering mod...")
-	
-	exit(0)
-
-# ==============================setmodver command===============================
-def setModVersion(argv) -> int:
-	print("Setting mod version")
-	
-	exit(0)
 
 # ===============================serve-up command===============================
 serve_up_subparser = subparsers.add_parser(

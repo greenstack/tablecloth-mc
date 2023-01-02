@@ -210,7 +210,7 @@ def registerMod(argv) -> int:
 	# additions. Should make mods easier to unregister as well.
 	config[CONFIG_MODS][argv.name] = mod
 	dumpConfig(config)
-	print("Registered {}. Run `tablecloth serve-up` to download it.")
+	print("Registered {}. Run `tablecloth serve-up` to download it.".format(argv.name))
 
 	exit(0)
 

@@ -162,7 +162,7 @@ def findModVersion(modName: str, modVersion: str) -> dict:
 	return version
 
 def addModToConfig(config: dict, modName: str, modInfo: dict, overwrite: bool) -> bool:
-	if config[CONFIG_MODS][modName] and not overwrite:
+	if modName in config[CONFIG_MODS].keys() and not overwrite:
 		return False
 
 	config[CONFIG_MODS][modName] = {
@@ -196,9 +196,6 @@ def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: s
 	return True
 
 def registerMod(argv) -> int:
-	if not len(sys.argv) > 2:
-		register_mod_parser.parse_args(['-h'])
-		return
 	print("Searching for {} version {}".format(argv.name, argv.version))
 
 	projectDataJson = findMod(argv.name)

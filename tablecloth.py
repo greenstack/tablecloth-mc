@@ -130,14 +130,6 @@ mod_add_subparser = mod_subparsers.add_parser(
 )
 addCommonModParameters(mod_add_subparser, True)
 
-register_mod_parser = subparsers.add_parser(
-	"add-mod",
-	description="Register a mod to be downloaded [DEPRECATED. Use tablecloth mod add instead.]",
-	aliases=['am']
-)
-register_mod_parser.add_argument("name", type=str, help="The name of the mod")
-register_mod_parser.add_argument("version", type=str, help="The version of the mod to download")
-
 def findMod(modName: str) -> dict:
 	projectRequest = requests.get(MODRINTH_PROJECT_API.format(modName))
 	if not projectRequest.status_code == 200:
@@ -249,12 +241,6 @@ def registerMod(argv) -> int:
 
 mod_add_subparser.set_defaults(func=registerMod)
 
-def registerMod_DEPRECATED(argv):
-	print("WARNING: The add-mod command is deprecated. Use mod add instead.")
-	registerMod(argv)
-
-register_mod_parser.set_defaults(func=registerMod_DEPRECATED)
-
 # ==============================setmodver command===============================
 mod_set_ver_subparser = mod_subparsers.add_parser(
 	'set-ver',
@@ -268,10 +254,25 @@ def setModVersion(argv):
 mod_set_ver_subparser.set_defaults(func=setModVersion)
 
 # =============================mod remove command===============================
+mod_unregister_subparser = mod_subparsers.add_parser(
+	'remove',
+	description="Removes the mod from the list"
+)
+mod_unregister_subparser.add_argument("name", type=str, help="The name of the mod")
+# TODO: Add positional arugment --remove to uninstall the mod immediately
+
 def unregisterMod(argv) -> int:
 	config = getConfig()
 
-	print("Unregistering mod...")
+	if not argv.name in config[CONFIG_MODS].keys():
+		print("Mod {} isn't registered".format(argv.name))
+		exit(1)
+
+	config[CONFIG_MODS].pop(argv.name)
+
+	dumpConfig(config)
+	print("Removed {}".format(argv.name))
+mod_unregister_subparser.set_defaults(func=unregisterMod)
 
 # ===============================cleanup command================================
 def cleanup(argv) -> int:

@@ -64,6 +64,18 @@ CONFIG_FABRIC = "fabric"
 CONFIG_FABRIC_LOADER_VERSION = "loader-version"
 CONFIG_FABRIC_INSTALLER_VERSION = "installer-version"
 CONFIG_SERVER_JAR_NAME = "jar-name"
+
+CONFIG_MOD_NAME = "name"
+CONFIG_MOD_VERSION = "version"
+CONFIG_MOD_MODRINTH = "modrinth"
+CONFIG_MOD_MODRINTH_PROJECT_ID = "project-id"
+CONFIG_MOD_MODRINTH_VERSION_ID = "version-id"
+CONFIG_MOD_MODRINTH_DOWNLOAD_URL = "download-url"
+CONFIG_MOD_MODRINTH_FILENAME = "filename"
+CONFIG_MOD_MODRINTH_HASHES = "hashes"
+CONFIG_MOD_MODRINTH_HASHES_SHA512 = "sha512"
+CONFIG_MOD_MODRINTH_HASHES_SHA1 = "sha1"
+
 MODRINTH_API_BASE = "https://api.modrinth.com/v2/"
 MODRINTH_PROJECT_API = MODRINTH_API_BASE + "project/{}"
 MODRINTH_VERSION_API = MODRINTH_API_BASE + "project/{}/version"
@@ -98,10 +110,6 @@ def getConfig() -> dict:
 argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
 subparsers = argparser.add_subparsers()
 
-# ==============================setmodver command===============================
-def setModVersion(argv) -> int:
-	print("Setting mod version")
-
 # ================================mod subcommand================================
 mod_subparser = subparsers.add_parser(
 	'mod',
@@ -109,16 +117,19 @@ mod_subparser = subparsers.add_parser(
 )
 mod_subparsers = mod_subparser.add_subparsers()
 
+def addCommonModParameters(parser, addDownload: bool) -> None:
+	parser.add_argument("name", type=str, help="The name of the mod")
+	parser.add_argument("version", type=str, help="The version of the mod")
+	if addDownload:
+		parser.add_argument('--download', help="Specify this flag if you want to immediately download the mod")
+
+# ================================addmod command================================
 mod_add_subparser = mod_subparsers.add_parser(
 	'add',
 	description="Register a mod to be downloaded."
 )
-mod_add_subparser.add_argument("name", type=str, help="The name of the mod")
-mod_add_subparser.add_argument("version", type=str, help="The version of the mod to register")
+addCommonModParameters(mod_add_subparser, True)
 
-mod_add_subparser.add_argument('--download', help="Specify this flag if you want to immediately download the mod")
-
-# ================================addmod command================================
 register_mod_parser = subparsers.add_parser(
 	"add-mod",
 	description="Register a mod to be downloaded [DEPRECATED. Use tablecloth mod add instead.]",
@@ -158,6 +169,40 @@ def findModVersion(modName: str, modVersion: str) -> dict:
 				break
 	return version
 
+def addModToConfig(config: dict, modName: str, modInfo: dict, overwrite: bool) -> bool:
+	if config[CONFIG_MODS][modName] and not overwrite:
+		return False
+
+	config[CONFIG_MODS][modName] = {
+		CONFIG_MOD_NAME: modName,
+		CONFIG_MOD_VERSION: "",
+		CONFIG_MOD_MODRINTH: {
+			CONFIG_MOD_MODRINTH_PROJECT_ID: modInfo["id"],
+			CONFIG_MOD_MODRINTH_VERSION_ID: "",
+			CONFIG_MOD_MODRINTH_DOWNLOAD_URL: "",
+			CONFIG_MOD_MODRINTH_FILENAME: "",
+			CONFIG_MOD_MODRINTH_HASHES: {
+				CONFIG_MOD_MODRINTH_HASHES_SHA512: "",
+				CONFIG_MOD_MODRINTH_HASHES_SHA1: "",
+			}
+		}
+	}
+	return True
+
+def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: str, versionInfo: dict) -> bool:
+	if not config[CONFIG_MODS][modName]:
+		return False
+
+	modConfig = config[CONFIG_MODS][modName]
+	modConfig[CONFIG_MOD_VERSION] = versionId
+	modrinthConfig = modConfig[CONFIG_MOD_MODRINTH]
+	modrinthConfig[CONFIG_MOD_MODRINTH_VERSION_ID] = modVersionId
+	modrinthConfig[CONFIG_MOD_MODRINTH_DOWNLOAD_URL] = versionInfo["url"]
+	modrinthConfig[CONFIG_MOD_MODRINTH_FILENAME] = versionInfo["filename"]
+	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA512] = versionInfo["hashes"]["sha512"]
+	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA1] = versionInfo["hashes"]["sha1"]
+	return True
+
 def registerMod(argv) -> int:
 	if not len(sys.argv) > 2:
 		register_mod_parser.parse_args(['-h'])
@@ -189,26 +234,14 @@ def registerMod(argv) -> int:
 		else:
 			versionFile = file
 
-	mod = {
-		"name": argv.name,
-		"version": argv.version,
-		"modrinth":
-		{
-			"project-id": projectDataJson["id"],
-			"version-id": version["id"], # Helps us keep it in place
-			"download-url": versionFile["url"], # Gives us a link to the place
-			"filename": versionFile["filename"],
-			"hashes": { # Will let us know during serve-up if we need to download or not
-				"sha512": versionFile["hashes"]["sha512"],
-				"sha1": versionFile["hashes"]["sha1"],
-			}
-		}
-	}
+	# TODO: Test this first thing!
+	addModToConfig(config, argv.name, projectDataJson, False)
+	cfgSetModVersion(config, argv.name, argv.version, version["id"], versionFile)
 
 	# TODO: Make sure mod isn't already here
 	# TODO: Make the mod name the key so we don't have to worry about redundant
 	# additions. Should make mods easier to unregister as well.
-	config[CONFIG_MODS][argv.name] = mod
+	
 	dumpConfig(config)
 	print("Registered {}. Run `tablecloth serve-up` to download it.".format(argv.name))
 
@@ -222,8 +255,22 @@ def registerMod_DEPRECATED(argv):
 
 register_mod_parser.set_defaults(func=registerMod_DEPRECATED)
 
+# ==============================setmodver command===============================
+mod_set_ver_subparser = mod_subparsers.add_parser(
+	'set-ver',
+	description="Sets the version for an already registered mod."
+)
+addCommonModParameters(mod_set_ver_subparser, True)
+
+def setModVersion(argv):
+	print("Setting mod version")
+
+mod_set_ver_subparser.set_defaults(func=setModVersion)
+
 # =============================mod remove command===============================
 def unregisterMod(argv) -> int:
+	config = getConfig()
+
 	print("Unregistering mod...")
 
 # ===============================cleanup command================================

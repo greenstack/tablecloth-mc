@@ -23,8 +23,26 @@ this functionality is still forthcoming._
 ## config-version
 Configure the versions of Minecraft and the Fabric components
 
+## mod
+Perform various operations on registered mods.
+
+### add
+Add the given mod. If the mod is already registered, this command will fail.
+
+### set-ver
+Set the version for the mod. If the mod can't be found on Modrinth, the command
+will fail. It will also fail if the mod hasn't already been downloaded.
+
+### remove
+Unregisters the given mod.
+
 ## serve-up
 Download the server jar and mods
+
+# Roadmap
+ - Add automated testing
+ - Add a `tablecloth.lock.json` file to help make downloading more efficient.
+ - Threading to download multiple mods at once?
 
 # License
 Tablecloth MC is published under the MIT License.

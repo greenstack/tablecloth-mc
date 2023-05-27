@@ -16,33 +16,127 @@ however.
 
 After you run Tablecloth for the first time, it will create a file called
 `tablecloth.json`. This is the configuration file that Tablecloth uses. You can
-edit it yourself or you can use Tablecloth to manage it as well. _**NOTE** that
-this functionality is still forthcoming._
+edit it yourself or you can use Tablecloth to manage it as well.
 
-# Subcommands
-## config-version
-Configure the versions of Minecraft and the Fabric components
+# Settings
+At present, these settings can only be modified manually (except current-profile). Items with \* haven't been implemented yet.
 
-## mod
-Perform various operations on registered mods.
+ - **Assume Current Profile**\*: Sets whether Tablecloth should assume that the currently set profile is the profile to execute on. If false, then each command must identify which profile it's using.
+ - **Current Profile**\*: The name of the current profile.
+ - **Launch**\*: Parameters for launching the server using Tablecloth. This feature is a wishlist item that I'm just listing here before I can put it in as an issue on GitHub.
+   - **Jar Name**\*: The name of the Jar to launch. If null, uses the default jar.
+	 - **Java Path**\*: The path to the Java executable. If null, uses the system value for Java.
+	 - **Java Args**\*: An array of args to pass to Java.
+ - **Validation**\*: Settings to validate the integrity of downloaded files.
+   - **Hashes**\*: Ensures that the hashes match those reported by Modrinth.
+	 - **Size**\*: Ensures that the file size matches that reported by Modrinth.
 
-### add
-Add the given mod. If the mod is already registered, this command will fail.
+# Actions
+Notes:
+ - All parameters without `--` are required for the action.
+ - Any action marked with `*` is a planned feature.
+ - If `--profile` isn't provided and `assume-current-profile` is `true`, then the operations will be performed on the `current-profile`. The exception to this is the `profile` actions. If `assume-current-profile` is false, the user must use either `--current-profile` or pass in a specific profile name.
 
-### set-ver
-Set the version for the mod. If the mod can't be found on Modrinth, the command
-will fail. It will also fail if the mod hasn't already been downloaded.
+## `cleanup`\*
+Checks for mods that have been removed and deletes them.
 
-### remove
-Unregisters the given mod.
+**Parameters**  
+None for now.
 
-## serve-up
-Download the server jar and mods
+## `launch`\*
+ Starts the Minecraft Server.
+
+## `mod`\*
+Provides actions for working with mods in a profile.
+
+If the mod name is provided as the only argument, this action will give all relevant data.
+
+### `mod add`\*
+Adds the mod to the profile (but doesn't add the jar file yet).
+
+### `mod list`\*
+Prints all mods that are a part of the profile.
+
+### `mod remove`\*
+Removes the specified mod from the profile (but doesn't remove the mod jar itself).
+
+### `mod search`\*
+Reports all profiles that have the mod.
+
+### `mod setver`\*
+Sets the mod's version.
+
+## `profile`\*
+Manages profiles stored by tablecloth.
+
+### `profile add`\*
+Adds a new profile, taking the user through a wizard to put in the required parameters.
+
+### `profile copy`\*
+Creates a new profile based on an existing profile.
+
+**Parameters**  
+ - Positional:
+    - `source-profile`: The name of the profile to copy.
+		- `destination-profile`: The name of the new profile.
+
+### `profile list`\*
+Lists all profiles.
+
+### `profile override`\*
+Allows you to set a launch override for the profile.
+
+**Parameters**
+ - Optional:
+   - `--jar`: Sets the name of the server .jar that launch will run.
+   - `--java-path`: Sets the path to the Java Runtime Executable (JRE).
+   - `--java-args`: A list of args to pass to the JRE (comma seperated).
+
+### `profile remove`\*
+Removes a profile.
+
+**Parameters**  
+ - Positional:
+   - `profile-name`: The name of the profile to delete.
+
+### `profile rename`\*
+Renames a profile. If the profile is the `current-profile`, that setting will be updated.
+
+**Parameters**  
+ - Positional:
+   - `old-profile-name`: The name of the profile to rename.
+   - `new-profile-name`: The new name of the profile.
+
+## `serve-up`
+Downloads the registered mods and updates Minecraft and Fabric. Note that at present, this will configure everything to match only the current-profile. If the current profile is changed, `serve-up` must be run again.
+
+**Parameters**  
+None for now.
+
+## `config`\*
+Manages various config options. With no arguments, `config` will report the default settings.
+
+###
 
 # Roadmap
- - Add automated testing
- - Add a `tablecloth.lock.json` file to help make downloading more efficient.
- - Threading to download multiple mods at once?
+## Basic Functionality
+These features are needed to say that Tablecloth is in the beta stage.
+ - Profiles
+ - Download mod dependencies
+ - `tablecloth.lock.json`: A file that changes are committed to so users have a fallback if server configuration goes haywire.
+   - Would be saved through the `tablecloth commit` action.
+ - `tablecloth.cache.json`: A file that stores the hashes of the currently downloaded files. The idea is that if serve-up is run and a mod has already been downloaded, Tablecloth will skip downloading that mod. This will be updated with each run of `serve-up` and `cleanup` (if needed).
+ - Launch the server jar through Tablecloth.
+
+## Future Features
+ - Figure out how to get most current version of Minecraft for default config
+ - Figure out how to get most current version of Fabric jars for default config
+ - Figure out how to automatically get mod version that matches current profile's Minecraft version
+ - Report when a newer version of Minecraft is available that matches the minor version of the profile
+	 - i.e. if 1.19.3 is installed, would report that 1.19.4 is available
+	 - Should check if mods for profile are reported as compatible with current version
+ - Report when a newer version of a mod is available that's compatible with the profile's set Minecraft version
+   - `tablecloth update-check` would perform this check.
 
 # License
 Tablecloth MC is published under the MIT License.

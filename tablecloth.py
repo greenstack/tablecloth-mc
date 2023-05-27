@@ -50,14 +50,22 @@
 # setmodver [name] --url=[url] [--version=[version]]
 #		Sets the version of the mod to look for.
 
-
 import argparse
+import copy
 import json
 import os
 import requests
 import sys
 
 TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
+
+DEFAULT_MINECRAFT_VERSION = "1.19.4"
+DEFAULT_FABRIC_LOADER = "0.14.12"
+DEFAULT_FABRIC_INSTALLER = "0.11.1"
+
+CONFIG_PROFILES = "profiles"
+CONFIG_SETTINGS = "settings"
+
 CONFIG_MODS = "mods"
 CONFIG_MINECRAFT_VERSION = "minecraft-version"
 CONFIG_FABRIC = "fabric"
@@ -80,42 +88,185 @@ MODRINTH_API_BASE = "https://api.modrinth.com/v2/"
 MODRINTH_PROJECT_API = MODRINTH_API_BASE + "project/{}"
 MODRINTH_VERSION_API = MODRINTH_API_BASE + "project/{}/version"
 
-def getDefaultConfig() -> dict:
-	return {
-		CONFIG_SERVER_JAR_NAME: None,
-		CONFIG_MINECRAFT_VERSION: "1.19.3",
-		CONFIG_FABRIC: {
-			CONFIG_FABRIC_LOADER_VERSION: "0.14.12",
-			CONFIG_FABRIC_INSTALLER_VERSION: "0.11.1",
-		},
-		CONFIG_MODS: {},
-	}
+class TableclothArgparseFactory:
+	def __init__(self, argparser):
+		self.__commandStack = [argparser.add_subparsers()]
+		self.__currentParser = None
+	
+	def _current(self):
+		return self.__commandStack[-1]
 
-def dumpConfig(config: dict) -> None:
-	with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
-		json.dump(config, configFile)
+	def AddGroup(self, parserName):
+		# I have this mixed up. A Parser is given Subparsers; subparsers are given
+		# parsers. They aren't given each other the thing.
+		parser = self._current().add_parser(parserName)
+		self.__commandStack.append(parser.add_subparsers())
 
-def getConfig() -> dict:
-	if (not os.path.exists(TABLECLOTH_CONFIG_PATH)):
-		config = getDefaultConfig()
-		# Write the default tablecloth.json file
-		dumpConfig(config)
+	def StartParser(self, commandName: str, description: str) -> None:
+		self.__currentParser = self._current().add_parser(commandName)
+
+	def AddArgument(self, argName: str, help: str) -> None:
+		self.__currentParser.add_argument(argName, help)
+
+	def EndParser(self, actionType: type) -> None:
+		self.__currentParser.set_defaults(func = lambda argv, config: actionType(config).Perform(argv))
+		self.__currentParser = None
+
+	def EndGroup(self) -> None:
+		self.__commandStack.pop()
+
+class TableclothProfile:
+	def __init__(self, mcVer:str = DEFAULT_MINECRAFT_VERSION, fabricLoaderVer:str = DEFAULT_FABRIC_LOADER, fabricInstallerVer:str = DEFAULT_FABRIC_INSTALLER) -> None:
+		self.__minecraftVersion = mcVer
+		self.__fabricLoaderVersion = fabricLoaderVer
+		self.__fabricInstallerVersion = fabricInstallerVer
+		self.__mods = {}
+
+	def SetMinecraftVersion(self, minecraftVersion: str) -> None:
+		self.__minecraftVersion = minecraftVersion
+
+	def GetMinecraftVersion(self) -> str:
+		return self.__minecraftVersion
+
+	def SetFabricInstallerVersion(self, fabricInstallerVersion: str) -> None:
+		self.__fabricInstallerVersion = fabricInstallerVersion
+
+	def SetFabricLoaderVersion(self, fabricLoaderVersion: str) -> None:
+		self.__fabricLoaderVersion = fabricLoaderVersion
+
+	def ToDict(self) -> dict:
+		return {
+			"minecraft": {
+				"version": self.__minecraftVersion
+			},
+			"fabric": {
+				"loader": self.__fabricLoaderVersion,
+				"installer": self.__fabricInstallerVersion,
+			},
+			"mods": self.__mods
+		}
+
+class TableclothConfig:
+	def __defaultConfig() -> dict:
+		return {
+			"profiles": {
+				"default": TableclothProfile()
+			},
+			"settings": {
+				"assume-current-profile": True,
+				"current-profile": "default",
+				"launch": {
+					"jar-name": None,
+					"java-path": None,
+					"java-args": []
+				},
+				"validation": {
+					"hashes": True,
+					"size": True,
+				}
+			}
+		}
+
+	def __init__(self):
+		if (not os.path.exists(TABLECLOTH_CONFIG_PATH)):
+			self.__config = TableclothConfig.__defaultConfig()
+			return
+
+		with open(TABLECLOTH_CONFIG_PATH, 'r') as configFile:
+			self.__config = json.load(configFile)
+
+	def Save(self):
+		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
+			json.dump(self.__config, configFile)
+
+	def AddProfile(self, profileName: str, mcVersion: str, fabLoaderVer: str, fabInstallerVer: str):
+		self.__config[CONFIG_PROFILES][profileName] = TableclothProfile(mcVersion, fabLoaderVer, fabInstallerVer)
+
+	def RenameProfile(self, oldProfileName: str, newProfileName: str):
+		self.__config[CONFIG_PROFILES][newProfileName] = self.__config[CONFIG_PROFILES][oldProfileName]
+		del self.__config[CONFIG_PROFILES][oldProfileName]
+
+	def CopyProfile(self, oldProfileName: str, newProfileName: str) -> bool:
+		if newProfileName in self.__config[CONFIG_PROFILES]:
+			return False
+
+		self.__config[CONFIG_PROFILES][newProfileName] = copy.deepcopy(self.__config[CONFIG_PROFILES][oldProfileName])
+		return True
+
+	def GetProfile(self, profileName: str) -> TableclothProfile:
+		return self.__config[CONFIG_PROFILES][profileName]
+
+	def ToDict(self) -> dict:
+		config = copy.deepcopy(self.__config)
+		
+		# Convert the profiles to dictionaries for JSON serialization
+		profiles = {}
+		for profile, settings in config[CONFIG_PROFILES].items():
+			profiles[profile] = settings.ToDict()
+
+		config[CONFIG_PROFILES] = profiles
 		return config
 
-	with open(TABLECLOTH_CONFIG_PATH, 'r') as openFile:
-		config = json.load(openFile)
-		return config
+# Base class for all actions in tablecloth.
+class TableclothActionBase:
+	def __init__(self, config: TableclothConfig) -> None:
+		self._config = config
+
+	def Perform(self, argv: argparse.Namespace) -> None:
+		pass
+
+class SimpleAction(TableclothActionBase):
+	def __init__(self, config: TableclothConfig) -> None:
+		super().__init__(config)
+
+	def Perform(self, argv: argparse.Namespace) -> None:
+		print("Success!")
+
+# Base class for profile-based actions. Work in progress; here to remind me
+class ProfileActionBase(TableclothActionBase):
+	def __init__(self, config: TableclothConfig, profileName: str) -> None:
+		super().__init__(config)
+		self._profileName = profileName
+		pass
+
+class CreateProfileAction(ProfileActionBase):
+	def __init__(self, config: TableclothConfig, profileName: str) -> None:
+		super().__init__(config, profileName)
+
+	def Perform(self, argv: argparse.Namespace) -> None:
+		# Check for argument values in args
+
+		minecraftVersion = None
+		if argv.minecraftVersion:
+			minecraftVersion = argv.minecraftVersion
+		else:
+			minecraftVersion = input("Enter Minecraft version:")
+
+		fabricLoaderVersion = None
+		if argv.fabricLoader:
+			fabricLoaderVersion = argv.fabricLoader
+		else:
+			fabricLoaderVersion = input("Fabric Loader version:")
+
+		fabricInstallerVersion = None
+		if argv.fabricInstaller:
+			fabricInstallerVersion = argv.fabricInstaller
+		else:
+			fabricInstallerVersion = input("Fabric Installer version:")
+
+		# If they're not there, ask user for them
+		self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
 
 # ============================argument parser setup=============================
 argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
-subparsers = argparser.add_subparsers()
+argFactory = TableclothArgparseFactory(argparser)
+subparsers = argFactory._current()
+
+argFactory.StartParser("test", "test")
+argFactory.EndParser(SimpleAction)
+argFactory.EndGroup()
 
 # ================================mod subcommand================================
-mod_subparser = subparsers.add_parser(
-	'mod',
-	description="Perform various operations on mod config."
-)
-mod_subparsers = mod_subparser.add_subparsers()
 
 def addCommonModParameters(parser, addDownload: bool) -> None:
 	parser.add_argument("name", type=str, help="The name of the mod")
@@ -124,11 +275,6 @@ def addCommonModParameters(parser, addDownload: bool) -> None:
 		parser.add_argument('--download', help="Specify this flag if you want to immediately download the mod")
 
 # ================================addmod command================================
-mod_add_subparser = mod_subparsers.add_parser(
-	'add',
-	description="Register a mod to be downloaded."
-)
-addCommonModParameters(mod_add_subparser, True)
 
 def findMod(modName: str) -> dict:
 	projectRequest = requests.get(MODRINTH_PROJECT_API.format(modName))
@@ -223,39 +369,22 @@ def registerMod(argv) -> int:
 		else:
 			versionFile = file
 
-	# TODO: Test this first thing!
-	addModToConfig(config, argv.name, projectDataJson, False)
+	success = addModToConfig(config, argv.name, projectDataJson, False)
+	if not success:
+		print("Did not register the mod.")
+		exit(1)
 	cfgSetModVersion(config, argv.name, argv.version, version["id"], versionFile)
-
-	# TODO: Make sure mod isn't already here
-	# TODO: Make the mod name the key so we don't have to worry about redundant
-	# additions. Should make mods easier to unregister as well.
 	
 	dumpConfig(config)
 	print("Registered {}. Run `tablecloth serve-up` to download it.".format(argv.name))
 
 	exit(0)
 
-mod_add_subparser.set_defaults(func=registerMod)
-
 # ==============================setmodver command===============================
-mod_set_ver_subparser = mod_subparsers.add_parser(
-	'set-ver',
-	description="Sets the version for an already registered mod."
-)
-addCommonModParameters(mod_set_ver_subparser, True)
 
 def setModVersion(argv):
 	print("Setting mod version")
-
-mod_set_ver_subparser.set_defaults(func=setModVersion)
-
 # =============================mod remove command===============================
-mod_unregister_subparser = mod_subparsers.add_parser(
-	'remove',
-	description="Removes the mod from the list"
-)
-mod_unregister_subparser.add_argument("name", type=str, help="The name of the mod")
 # TODO: Add positional arugment --remove to uninstall the mod immediately
 
 def unregisterMod(argv) -> int:
@@ -269,7 +398,6 @@ def unregisterMod(argv) -> int:
 
 	dumpConfig(config)
 	print("Removed {}".format(argv.name))
-mod_unregister_subparser.set_defaults(func=unregisterMod)
 
 # ===============================cleanup command================================
 def cleanup(argv) -> int:
@@ -278,10 +406,6 @@ def cleanup(argv) -> int:
 	exit(0)
 
 # =================================init command=================================
-init_subparser = subparsers.add_parser(
-	'init',
-	description="Initialize Tablecloth with the default settings"
-)
 def init(argv) -> int:
 	if os.path.exists(TABLECLOTH_CONFIG_PATH):
 		print(TABLECLOTH_CONFIG_PATH + " already exists.")
@@ -289,13 +413,9 @@ def init(argv) -> int:
 	print("Creating original config")
 	dumpConfig(getDefaultConfig())
 	print("Created config file ({})".format(TABLECLOTH_CONFIG_PATH))
-init_subparser.set_defaults(func=init)
 
 # ===============================serve-up command===============================
-serve_up_subparser = subparsers.add_parser(
-	'serve-up',
-	description="Download the server jar and mods"
-)
+
 #TODO: Add a --clean param that cleans the mods folder before doing the download
 #TODO: Add a --dry-run param that will show the user what this command will do
 
@@ -339,21 +459,11 @@ def performUpdate(args) -> int:
 
 	exit(0)
 
-serve_up_subparser.set_defaults(func=performUpdate)
 
 # ===========================config-versions command============================
-config_versions_subparser = subparsers.add_parser(
-		"config-version",
-		aliases=['cv'],
-		description="Configure the versions of Minecraft and the Fabric components"
-)
-config_versions_subparser.add_argument('--minecraft', metavar="[Minecraft Version]", type=str, help="The desired Minecraft version")
-config_versions_subparser.add_argument('--fabric-loader', metavar="[Loader Version]", type=str, help="The version of the Fabric loader to use")
-config_versions_subparser.add_argument('--fabric-installer', metavar="[Installer Version]", type=str, help="The version of the Fabric installer to use")
-
-def configVersions(args) -> int:
+def configVersions(args, config: TableclothConfig) -> int:
 	if not len(sys.argv) > 2:
-		config_versions_subparser.parse_args(['-h'])
+		#config_versions_subparser.parse_args(['-h'])
 		#print("Must define a version for either --minecraft, --fabric-loader, or --fabric-installer")
 		exit(1)
 
@@ -368,11 +478,10 @@ def configVersions(args) -> int:
 		config[CONFIG_FABRIC][CONFIG_FABRIC_INSTALLER_VERSION] = args.fabric_installer
 		print("Set Fabric installer version to " + args.fabric_installer)
 
-	dumpConfig(config)
+	config.Save()
 
 	exit(0)
 
-config_versions_subparser.set_defaults(func=configVersions)
 
 # ================================main function=================================
 def main():
@@ -380,8 +489,10 @@ def main():
 		argparser.parse_args(['-h'])
 		return
 
+	config = TableclothConfig()
+	print(json.dumps(config.ToDict(), indent=4))
 	args = argparser.parse_args()
-	args.func(args)
+	args.func(args, config)
 
 if __name__ == "__main__":
 	main()

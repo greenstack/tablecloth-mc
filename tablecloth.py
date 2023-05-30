@@ -1,9 +1,9 @@
 #!/usr/bin/python3
 
-# Tablecloth version 0.1-alpha
+# Tablecloth Alpha 0.2
 
 # ===================================LICENSE====================================
-# Copyright © 2022 GreenstackJ
+# Copyright © 2022-2023 GreenstackJ
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the “Software”), to deal
@@ -24,31 +24,8 @@
 # SOFTWARE.
 # ==============================================================================
 
-# Tablecloth is a software designed to automatically upgrade Minecraft servers
-# that have been modded with Fabric from the CLI.
-
-# Subcommands:
-#
-# addmod [name] [version]
-#		Registers a mod for use. It doesn't perform the download, however. Run the
-#		tablecloth serve-up command.
-#
-# cleanup
-#		Checks for mods that have been removed and deletes them.
-#
-# config-versions [--minecraft=[versionId]] [--fabric-loader=[versionId]]
-#									[--fabric-launcher=[versionId]]
-#		Sets the version of the component that Tablecloth should search for.
-#
-# removemod [name]
-#		Unregisters a mod for use. It doesn't perform the removal, however. Run
-#		tablecloth cleanup to do that.
-#
-# serve-up
-#		Downloads registered mods and updates Minecraft and Fabric.
-#
-# setmodver [name] --url=[url] [--version=[version]]
-#		Sets the version of the mod to look for.
+# Tablecloth is a software designed to automatically download jars for Minecraft
+# servers modded with Fabric from the CLI.
 
 import argparse
 import copy
@@ -96,7 +73,7 @@ class TableclothArgparseFactory:
 	def _current(self):
 		return self.__commandStack[-1]
 
-	def AddGroup(self, parserName):
+	def StartGroup(self, parserName):
 		# I have this mixed up. A Parser is given Subparsers; subparsers are given
 		# parsers. They aren't given each other the thing.
 		parser = self._current().add_parser(parserName)
@@ -115,16 +92,21 @@ class TableclothArgparseFactory:
 	def EndGroup(self) -> None:
 		self.__commandStack.pop()
 
+# Represents a Tablecloth installation profile.
 class TableclothProfile:
 	def __init__(self, mcVer:str = DEFAULT_MINECRAFT_VERSION, fabricLoaderVer:str = DEFAULT_FABRIC_LOADER, fabricInstallerVer:str = DEFAULT_FABRIC_INSTALLER) -> None:
 		self.__minecraftVersion = mcVer
 		self.__fabricLoaderVersion = fabricLoaderVer
 		self.__fabricInstallerVersion = fabricInstallerVer
 		self.__mods = {}
+		self.__jarName = None
+		self.__javaPath = None
+		self.__javaArgs = []
 
 	def SetMinecraftVersion(self, minecraftVersion: str) -> None:
 		self.__minecraftVersion = minecraftVersion
 
+	# Returns the Minecraft version of this profile.
 	def GetMinecraftVersion(self) -> str:
 		return self.__minecraftVersion
 
@@ -133,6 +115,23 @@ class TableclothProfile:
 
 	def SetFabricLoaderVersion(self, fabricLoaderVersion: str) -> None:
 		self.__fabricLoaderVersion = fabricLoaderVersion
+
+	def FromDict(data):
+		#todo: data validation
+		profile = TableclothProfile(
+			data['minecraft']['version'],
+			data["fabric"]["loader"],
+			data["fabric"]["installer"]
+		)
+
+		for mod, settings in data["mods"].items():
+			profile.AddMod(mod, settings["version"], settings["modrinth"])
+
+		profile.SetJarName(data["overrides"]["jar-name"])
+		profile.SetJavaPath(data["overrides"]["java-path"])
+		profile.__javaArgs = data["overrides"]["java-args"]
+
+		return profile
 
 	def ToDict(self) -> dict:
 		return {
@@ -143,9 +142,50 @@ class TableclothProfile:
 				"loader": self.__fabricLoaderVersion,
 				"installer": self.__fabricInstallerVersion,
 			},
-			"mods": self.__mods
+			"mods": self.__mods,
+			"overrides": {
+				"jar-name": self.__jarName,
+				"java-path": self.__javaPath,
+				"java-args": self.__javaArgs,
+			}
 		}
 
+	def AddMod(self, modName, version, modrinthInfo) -> None:
+		self.__mods[modName] = {
+			"version": version,
+			"modrinth": modrinthInfo,
+		}
+
+	def RemoveMod(self, modName) -> None:
+		self.__mods.pop(modName)
+
+	# Gets a list of all mods in this profile.
+	def ListMods(self) -> list:
+		return self.__mods.keys()
+
+	# Determines if a mod exists in this profile.
+	def HasMod(self, modName) -> bool:
+		return modName in self.ListMods()
+
+	def SetJarName(self, jarName) -> None:
+		self.__jarName = jarName
+
+	def GetJarName(self) -> str:
+		return self.__jarName
+
+	def DoesOverrideJarName(self) -> bool:
+		return self.GetJarName() is not None
+
+	def SetJavaPath(self, javaPath) -> None:
+		self.__javaPath = javaPath
+
+	def GetJavaPath(self) -> str:
+		return self.__javaPath
+
+	def DoesOverrideJavaPath(self) -> bool:
+		return self.GetJavaPath() is not None
+
+# Represents and provides methods for Tablecloth configuration.
 class TableclothConfig:
 	def __defaultConfig() -> dict:
 		return {
@@ -172,12 +212,21 @@ class TableclothConfig:
 			self.__config = TableclothConfig.__defaultConfig()
 			return
 
-		with open(TABLECLOTH_CONFIG_PATH, 'r') as configFile:
-			self.__config = json.load(configFile)
+		self.__config = TableclothConfig.Load(TABLECLOTH_CONFIG_PATH)
+
+	def Load(filePath) -> dict:
+		with open(filePath, 'r') as configFile:
+			config = json.load(configFile)
+		profiles = {}
+		for profile, data in config[CONFIG_PROFILES].items():
+			profiles[profile] = TableclothProfile.FromDict(data)
+		config.pop(CONFIG_PROFILES)
+		config[CONFIG_PROFILES] = profiles
+		return config
 
 	def Save(self):
 		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
-			json.dump(self.__config, configFile)
+			json.dump(self.ToDict(), configFile)
 
 	def AddProfile(self, profileName: str, mcVersion: str, fabLoaderVer: str, fabInstallerVer: str):
 		self.__config[CONFIG_PROFILES][profileName] = TableclothProfile(mcVersion, fabLoaderVer, fabInstallerVer)
@@ -188,6 +237,10 @@ class TableclothConfig:
 
 	def CopyProfile(self, oldProfileName: str, newProfileName: str) -> bool:
 		if newProfileName in self.__config[CONFIG_PROFILES]:
+			print("Profile {0:s} already exists!".format(newProfileName))
+			return False
+		if not oldProfileName in self.__config[CONFIG_PROFILES]:
+			print("Profile {0:s} doesn't exist!".format(oldProfileName))
 			return False
 
 		self.__config[CONFIG_PROFILES][newProfileName] = copy.deepcopy(self.__config[CONFIG_PROFILES][oldProfileName])
@@ -209,62 +262,61 @@ class TableclothConfig:
 
 # Base class for all actions in tablecloth.
 class TableclothActionBase:
-	def __init__(self, config: TableclothConfig) -> None:
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
 		self._config = config
+		self._argv = argv
 
-	def Perform(self, argv: argparse.Namespace) -> None:
+	def Perform(self) -> None:
 		pass
-
-class SimpleAction(TableclothActionBase):
-	def __init__(self, config: TableclothConfig) -> None:
-		super().__init__(config)
-
-	def Perform(self, argv: argparse.Namespace) -> None:
-		print("Success!")
 
 # Base class for profile-based actions. Work in progress; here to remind me
 class ProfileActionBase(TableclothActionBase):
-	def __init__(self, config: TableclothConfig, profileName: str) -> None:
-		super().__init__(config)
-		self._profileName = profileName
-		pass
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
+		self._profileName = self._argv.profileName
 
 class CreateProfileAction(ProfileActionBase):
-	def __init__(self, config: TableclothConfig, profileName: str) -> None:
-		super().__init__(config, profileName)
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
 
-	def Perform(self, argv: argparse.Namespace) -> None:
+	def Perform(self) -> None:
 		# Check for argument values in args
-
-		minecraftVersion = None
-		if argv.minecraftVersion:
-			minecraftVersion = argv.minecraftVersion
-		else:
-			minecraftVersion = input("Enter Minecraft version:")
-
-		fabricLoaderVersion = None
-		if argv.fabricLoader:
-			fabricLoaderVersion = argv.fabricLoader
-		else:
-			fabricLoaderVersion = input("Fabric Loader version:")
-
-		fabricInstallerVersion = None
-		if argv.fabricInstaller:
-			fabricInstallerVersion = argv.fabricInstaller
-		else:
-			fabricInstallerVersion = input("Fabric Installer version:")
-
 		# If they're not there, ask user for them
+		minecraftVersion = self._argv.mcversion or input("Enter Minecraft version:")
+		fabricLoaderVersion = self._argv.fabricloader or input("Fabric Loader version:")
+		fabricInstallerVersion = self._argv.fabricinstaller or input("Fabric Installer version:")
+
 		self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
 
-# ============================argument parser setup=============================
-argparser = argparse.ArgumentParser(description="Manage your Fabric-modded Minecraft server installation")
-argFactory = TableclothArgparseFactory(argparser)
-subparsers = argFactory._current()
+class CopyProfileAction(ProfileActionBase):
+	def __init__(self, argv:argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
 
-argFactory.StartParser("test", "test")
-argFactory.EndParser(SimpleAction)
-argFactory.EndGroup()
+	def Perform(self) -> None:
+		self._config.CopyProfile(self._profileName, self._argv.newProfile)
+
+def CallbackFromClass(action: type):
+	return lambda argv, config: action(argv, config).Perform()
+
+# ============================argument parser setup=============================
+argparser = argparse.ArgumentParser(prog="Tablecloth MC", description="A CLI-based Minecraft Server launcher and Fabric mod installer")
+subparsers = argparser.add_subparsers()
+
+current_subparser = subparsers.add_parser("profile", help="Manage profiles")
+current_subparser.set_defaults(func = lambda args, config: argparser.parse_args(["profile", "-h"]))
+profile_parsers = current_subparser.add_subparsers()
+
+current_subparser = profile_parsers.add_parser("add", help="Adds a profile")
+current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile to create", type=str)
+current_subparser.add_argument('--mcversion', metavar="Minecraft Version", help='The version of Minecraft this profile uses', type=str)
+current_subparser.add_argument('--fabricloader', metavar="Fabric Loader", help="The version of the Fabric Loader this profile uses", type=str)
+current_subparser.add_argument('--fabricinstaller', metavar="Fabric Installer", help="The version of the Fabric installer this profile uses", type=str)
+current_subparser.set_defaults(func = CallbackFromClass(CreateProfileAction))
+
+current_subparser = profile_parsers.add_parser("copy", help="Copies one profile to another")
+current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the original profile", type=str)
+current_subparser.add_argument('newProfile', metavar="New Profile Name", help="The name of the new profile", type=str)
+current_subparser.set_defaults(func = CallbackFromClass(CopyProfileAction))
 
 # ================================mod subcommand================================
 
@@ -490,9 +542,9 @@ def main():
 		return
 
 	config = TableclothConfig()
-	print(json.dumps(config.ToDict(), indent=4))
 	args = argparser.parse_args()
 	args.func(args, config)
+	print(json.dumps(config.ToDict(), indent=2))
 
 if __name__ == "__main__":
 	main()

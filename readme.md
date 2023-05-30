@@ -66,13 +66,13 @@ Reports all profiles that have the mod.
 ### `mod setver`\*
 Sets the mod's version.
 
-## `profile`\*
-Manages profiles stored by tablecloth.
+## `profile`
+Manages profiles stored by tablecloth. None of these commands will assume a default profile, regardless of settings.
 
-### `profile add`\*
+### `profile add`
 Adds a new profile, taking the user through a wizard to put in the required parameters.
 
-### `profile copy`\*
+### `profile copy`
 Creates a new profile based on an existing profile.
 
 **Parameters**  
@@ -80,10 +80,10 @@ Creates a new profile based on an existing profile.
     - `source-profile`: The name of the profile to copy.
 		- `destination-profile`: The name of the new profile.
 
-### `profile list`\*
+### `profile list`
 Lists all profiles.
 
-### `profile override`\*
+### `profile override`
 Allows you to set a launch override for the profile.
 
 **Parameters**
@@ -92,14 +92,14 @@ Allows you to set a launch override for the profile.
    - `--java-path`: Sets the path to the Java Runtime Executable (JRE).
    - `--java-args`: A list of args to pass to the JRE (comma seperated).
 
-### `profile remove`\*
+### `profile remove`
 Removes a profile.
 
 **Parameters**  
  - Positional:
    - `profile-name`: The name of the profile to delete.
 
-### `profile rename`\*
+### `profile rename`
 Renames a profile. If the profile is the `current-profile`, that setting will be updated.
 
 **Parameters**  

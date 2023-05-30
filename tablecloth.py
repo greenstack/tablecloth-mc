@@ -246,8 +246,14 @@ class TableclothConfig:
 		self.__config[CONFIG_PROFILES][newProfileName] = copy.deepcopy(self.__config[CONFIG_PROFILES][oldProfileName])
 		return True
 
+	def DeleteProfile(self, profileName: str) -> None:
+		self.__config[CONFIG_PROFILES].pop(profileName)
+
 	def GetProfile(self, profileName: str) -> TableclothProfile:
 		return self.__config[CONFIG_PROFILES][profileName]
+
+	def GetProfileNames(self) -> list:
+		return self.__config[CONFIG_PROFILES].keys()
 
 	def ToDict(self) -> dict:
 		config = copy.deepcopy(self.__config)
@@ -295,6 +301,28 @@ class CopyProfileAction(ProfileActionBase):
 	def Perform(self) -> None:
 		self._config.CopyProfile(self._profileName, self._argv.newProfile)
 
+class RenameProfileAction(ProfileActionBase):
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
+
+	def Perform(self) -> None:
+		self._config.RenameProfile(self._profileName, self._argv.newProfileName)
+
+class RemoveProfileAction(ProfileActionBase):
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
+
+	def Perform(self) -> None:
+		self._config.DeleteProfile(self._profileName)
+
+class ListProfilesAction(TableclothActionBase):
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
+
+	def Perform(self) -> None:
+		for profile in self._config.GetProfileNames():
+			print(profile)
+
 def CallbackFromClass(action: type):
 	return lambda argv, config: action(argv, config).Perform()
 
@@ -302,7 +330,10 @@ def CallbackFromClass(action: type):
 argparser = argparse.ArgumentParser(prog="Tablecloth MC", description="A CLI-based Minecraft Server launcher and Fabric mod installer")
 subparsers = argparser.add_subparsers()
 
-current_subparser = subparsers.add_parser("profile", help="Manage profiles")
+# ==============================================================================
+# PROFILE COMMANDS
+# ==============================================================================
+current_subparser = subparsers.add_parser("profile", help="Manage profiles. None of the profile commands will assume a profile, regardless of settings.")
 current_subparser.set_defaults(func = lambda args, config: argparser.parse_args(["profile", "-h"]))
 profile_parsers = current_subparser.add_subparsers()
 
@@ -317,6 +348,22 @@ current_subparser = profile_parsers.add_parser("copy", help="Copies one profile 
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the original profile", type=str)
 current_subparser.add_argument('newProfile', metavar="New Profile Name", help="The name of the new profile", type=str)
 current_subparser.set_defaults(func = CallbackFromClass(CopyProfileAction))
+
+current_subparser = profile_parsers.add_parser("rename", help="Renames an existing profile")
+current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile", type=str)
+current_subparser.add_argument('newProfileName', metavar="Profile New Name", help="The new name of the profile", type=str)
+current_subparser.set_defaults(func = CallbackFromClass(RenameProfileAction))
+
+current_subparser = profile_parsers.add_parser("remove", help="Removes a profile")
+current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile to remove", type=str)
+current_subparser.set_defaults(func = CallbackFromClass(RemoveProfileAction))
+
+current_subparser = profile_parsers.add_parser("list", help="Lists all profiles")
+current_subparser.set_defaults(func = CallbackFromClass(ListProfilesAction))
+# ==============================================================================
+# END PROFILE ACTIONS
+# ==============================================================================
+
 
 # ================================mod subcommand================================
 

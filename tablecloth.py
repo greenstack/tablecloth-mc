@@ -238,9 +238,17 @@ class TableclothConfig:
 	def __init__(self):
 		if (not os.path.exists(TABLECLOTH_CONFIG_PATH)):
 			self.__config = TableclothConfig.__defaultConfig()
+			self.__isDirty = True
 			return
 
 		self.__config = TableclothConfig.Load(TABLECLOTH_CONFIG_PATH)
+		self.__isDirty = False
+
+	def IsDirty(self) -> bool:
+		return self.__isDirty
+	
+	def MarkDirty(self) -> None:
+		self.__isDirty = True
 
 	def Load(filePath) -> dict:
 		with open(filePath, 'r') as configFile:
@@ -261,10 +269,12 @@ class TableclothConfig:
 
 	def AddProfile(self, profileName: str, mcVersion: str, fabLoaderVer: str, fabInstallerVer: str):
 		self.__config[CONFIG_PROFILES][profileName] = TableclothProfile(mcVersion, fabLoaderVer, fabInstallerVer)
+		self.__MarkDirty()
 
 	def RenameProfile(self, oldProfileName: str, newProfileName: str):
 		self.__config[CONFIG_PROFILES][newProfileName] = self.__config[CONFIG_PROFILES][oldProfileName]
 		del self.__config[CONFIG_PROFILES][oldProfileName]
+		self.__MarkDirty()
 
 	def CopyProfile(self, oldProfileName: str, newProfileName: str) -> bool:
 		if newProfileName in self.__config[CONFIG_PROFILES]:
@@ -274,11 +284,13 @@ class TableclothConfig:
 			print("Profile {0:s} doesn't exist!".format(oldProfileName))
 			return False
 
+		self.__MarkDirty()
 		self.__config[CONFIG_PROFILES][newProfileName] = copy.deepcopy(self.__config[CONFIG_PROFILES][oldProfileName])
 		return True
 
 	def DeleteProfile(self, profileName: str) -> None:
 		self.__config[CONFIG_PROFILES].pop(profileName)
+		self.__MarkDirty()
 
 	def GetProfile(self, profileName: str) -> TableclothProfile:
 		return self.__config[CONFIG_PROFILES][profileName]
@@ -503,6 +515,9 @@ class ModActionBase(ProfileRequiredActionBase):
 class AddModAction(ModActionBase):
 	def Perform(self) -> None:
 		self.GetProfile().AddMod(self._argv.modName, self._argv.modVersion)
+		#TODO: Config needs to pay attention to its profiles to mark itself dirty.
+		# Set up some observer pattern there.
+		self._config.MarkDirty()
 
 class ListModsAction(ModActionBase):
 	def Perform(self) -> None:
@@ -539,7 +554,6 @@ current_subparser.add_argument("modVersion", help="The version of the mod.")
 # ==============================================================================
 
 class LaunchAction(TableclothActionBase):
-
 	def __craftLaunchArgs(self) -> list:
 		config = self._config
 		javaArgs = config.GetLaunchInfo()
@@ -645,7 +659,7 @@ def main():
 	args.func(args, config)
 	if args.showResult or args.dry_run:
 		print(json.dumps(config.ToDict(), indent=2))
-	if not args.dry_run:
+	if not args.dry_run and config.IsDirty():
 		# TODO: Only do this if the action performed modifies the config.
 		config.Save()
 

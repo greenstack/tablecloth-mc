@@ -91,7 +91,7 @@ class TableclothArgparseFactory:
 
 	def EndGroup(self) -> None:
 		self.__commandStack.pop()
-
+	
 # Represents a Tablecloth installation profile.
 class TableclothProfile:
 	def __init__(self, mcVer:str = DEFAULT_MINECRAFT_VERSION, fabricLoaderVer:str = DEFAULT_FABRIC_LOADER, fabricInstallerVer:str = DEFAULT_FABRIC_INSTALLER) -> None:
@@ -149,11 +149,17 @@ class TableclothProfile:
 				"java-args": self.__javaArgs,
 			}
 		}
+		
 
-	def AddMod(self, modName, version, modrinthInfo) -> None:
+	def AddMod(self, modName, version) -> None:
 		self.__mods[modName] = {
 			"version": version,
-			"modrinth": modrinthInfo,
+			"enabled": True,
+			"modrinth": ModrinthHostService().GetHostModInfo(
+				self.GetMinecraftVersion(),
+				modName,
+				version
+			),
 		}
 
 	def RemoveMod(self, modName) -> None:
@@ -189,10 +195,10 @@ class TableclothProfile:
 class TableclothConfig:
 	def __defaultConfig() -> dict:
 		return {
-			"profiles": {
+			CONFIG_PROFILES: {
 				"default": TableclothProfile()
 			},
-			"settings": {
+			CONFIG_SETTINGS: {
 				"assume-current-profile": True,
 				"current-profile": "default",
 				"launch": {
@@ -252,6 +258,13 @@ class TableclothConfig:
 	def GetProfile(self, profileName: str) -> TableclothProfile:
 		return self.__config[CONFIG_PROFILES][profileName]
 
+	def GetCurrentProfileName(self) -> str:
+		return self.__config[CONFIG_SETTINGS]["current-profile"]
+
+	def GetCurrentProfile(self) -> TableclothProfile:
+		if self.__config[CONFIG_SETTINGS]["assume-current-profile"]:
+			return self.__config[CONFIG_PROFILES][self.GetCurrentProfileName()]
+
 	def GetProfileNames(self) -> list:
 		return self.__config[CONFIG_PROFILES].keys()
 
@@ -266,6 +279,69 @@ class TableclothConfig:
 		config[CONFIG_PROFILES] = profiles
 		return config
 
+# Base class to support other mod hosts down the line.
+class ModHostService:
+	def __init__(self, apiBase: str):
+		self.__apiBase = apiBase
+
+	def GetApiUrl(self):
+		return self.__apiBase
+	
+	# Responsible for getting all the information needed to download the mod.
+	def GetHostModInfo(self, gameVersion: str, modName: str, modVersion: str):
+		pass
+
+	# Used by serve-up
+	def DownloadMods(self, profile: TableclothProfile):
+		pass
+		
+
+class ModrinthHostService(ModHostService):
+	def __init__(self):
+		super().__init__("https://api.modrinth.com/v2/")
+
+	def FindModVersion(self, gameVersion: str, modName: str, modVersion: str) -> dict:
+		#TODO: Want to use Modrinth's search api. Should let us get this easier.
+		versionResponse = requests.get(
+			self.GetApiUrl() + "project/" + modName + "/version",
+			params = {
+				# TODO: This isn't working - gameVersion isn't
+				# being properly filtered. Can't figure out why.
+				"query": {
+					"loaders": ["fabric"],
+					"game_versions": [gameVersion],
+				}
+			})
+		
+		if not versionResponse.status_code == 200:
+			print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
+			return {}
+
+		versionData = versionResponse.json()
+
+		# This helps to find the version ID of the mod.
+		if len(versionData) == 1:
+			return versionData[0]
+		else:
+			versionList = []
+			for versionInfo in versionData:
+				if versionInfo["version_number"] == modVersion:
+					return versionInfo
+				else:
+					versionList.append(versionInfo["version_number"])
+			return versionList
+
+	def GetHostModInfo(self, gameVersion: str, modName: str, modVersion: str):
+		modInfo = self.FindModVersion(gameVersion, modName, modVersion)
+
+		return {
+			"project-id": modInfo["project_id"],
+			"version-id": modInfo["id"],
+			"files": modInfo["files"],
+			# Will be used to check for updates... eventually
+			"publish_date": modInfo["date_published"],
+		}
+
 # Base class for all actions in tablecloth.
 class TableclothActionBase:
 	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
@@ -275,6 +351,37 @@ class TableclothActionBase:
 	def Perform(self) -> None:
 		pass
 
+class ProfileRequiredActionBase(TableclothActionBase):
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig):
+		super().__init__(argv, config)
+		if argv.profile:
+			self.profile = config.GetProfile(argv.profile)
+		else:
+			self.profile = config.GetCurrentProfile()
+			if self.profile is None:
+				print("config.assume-current-profile is set to FALSE. A profile must be provided")
+				exit(1)
+
+def CreateActionGroup(argparser: argparse.ArgumentParser, subparsers: argparse._SubParsersAction, groupName, groupHelp):
+	parser = subparsers.add_parser(groupName, help=groupHelp)
+	# Set default behavior for the group with no arguments (show help)
+	parser.set_defaults(func = lambda args, config: argparser.parse_args([groupName, '-h']))
+	# This creates the group itself
+	return parser.add_subparsers()
+
+def CallbackFromClass(action: type):
+	return lambda argv, config: action(argv, config).Perform()
+
+# ============================argument parser setup=============================
+argparser = argparse.ArgumentParser(prog="Tablecloth MC Alpha 0.2", description="A CLI-based Minecraft Server launcher and Fabric mod installer ([WIP] commands can't be used)", epilog="At present, config isn't saved. Tablecloth Alpha 0.2 isn't production ready yet.")
+argparser.add_argument("--showResult", help="Displays the config when the command completes.", action="store_true")
+argparser.add_argument("--profile", "-p", help="The name of the profile to operate on or use. Ignored by the profile actions. If omitted, will use config.current-profile if config.assume-current-profile is true.")
+argparser.add_argument("--dry-run", help="[WIP] Performs a dry run and shows what the result would be without saving the config", action="store_true")
+subparsers = argparser.add_subparsers()
+
+# ==============================================================================
+# PROFILE COMMANDS
+# ==============================================================================
 # Base class for profile-based actions. Work in progress; here to remind me
 class ProfileActionBase(TableclothActionBase):
 	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
@@ -282,9 +389,6 @@ class ProfileActionBase(TableclothActionBase):
 		self._profileName = self._argv.profileName
 
 class CreateProfileAction(ProfileActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-
 	def Perform(self) -> None:
 		# Check for argument values in args
 		# If they're not there, ask user for them
@@ -295,47 +399,28 @@ class CreateProfileAction(ProfileActionBase):
 		self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
 
 class CopyProfileAction(ProfileActionBase):
-	def __init__(self, argv:argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-
 	def Perform(self) -> None:
 		self._config.CopyProfile(self._profileName, self._argv.newProfile)
 
 class RenameProfileAction(ProfileActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-
 	def Perform(self) -> None:
 		self._config.RenameProfile(self._profileName, self._argv.newProfileName)
 
 class RemoveProfileAction(ProfileActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-
 	def Perform(self) -> None:
 		self._config.DeleteProfile(self._profileName)
 
 class ListProfilesAction(TableclothActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-
 	def Perform(self) -> None:
 		for profile in self._config.GetProfileNames():
 			print(profile)
 
-def CallbackFromClass(action: type):
-	return lambda argv, config: action(argv, config).Perform()
-
-# ============================argument parser setup=============================
-argparser = argparse.ArgumentParser(prog="Tablecloth MC", description="A CLI-based Minecraft Server launcher and Fabric mod installer")
-subparsers = argparser.add_subparsers()
-
-# ==============================================================================
-# PROFILE COMMANDS
-# ==============================================================================
-current_subparser = subparsers.add_parser("profile", help="Manage profiles. None of the profile commands will assume a profile, regardless of settings.")
-current_subparser.set_defaults(func = lambda args, config: argparser.parse_args(["profile", "-h"]))
-profile_parsers = current_subparser.add_subparsers()
+profile_parsers = CreateActionGroup(
+	argparser,
+	subparsers,
+	"profile",
+	"Manage profiles. None of the profile commands will assume a profile, regardless of settings."
+)
 
 current_subparser = profile_parsers.add_parser("add", help="Adds a profile")
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile to create", type=str)
@@ -364,6 +449,43 @@ current_subparser.set_defaults(func = CallbackFromClass(ListProfilesAction))
 # END PROFILE ACTIONS
 # ==============================================================================
 
+
+# ==============================================================================
+# MOD ACTIONS
+# ==============================================================================
+class ModActionBase(ProfileRequiredActionBase):
+	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+		super().__init__(argv, config)
+
+mod_parsers = CreateActionGroup(
+	argparser,
+	subparsers,
+	"mod",
+	"Manages mods for a profile"
+)
+
+current_subparser = mod_parsers.add_parser("add", help="[WIP] Adds the mod to the profile. Doesn't download the mod, however.*")
+current_subparser.add_argument("modName", help="The name of the mod to add.")
+current_subparser.add_argument("modVersion", help="The version of the mod to add.")
+
+current_subparser = mod_parsers.add_parser("list", help="[WIP] Lists all the mods in the profile.")
+
+current_subparser = mod_parsers.add_parser("remove", help="[WIP] Removes the mod from the profile.")
+current_subparser.add_argument("modName", help="The name of the mod to remove.")
+
+current_subparser = mod_parsers.add_parser("search", help="[WIP] Reports each profile that has the mod.")
+current_subparser.add_argument("modName", help="The name of the mod to search for.")
+
+current_subparser = mod_parsers.add_parser("setver", help="[WIP] Sets the version of the mod.")
+current_subparser.add_argument("modVersion", help="The version of the mod.")
+
+# ==============================================================================
+# END MOD ACTIONS
+# ==============================================================================
+
+current_subparser = subparsers.add_parser("launch", help="[WIP] Launches the Minecraft server")
+
+current_subparser = subparsers.add_parser("serve-up", help="[WIP] Downloads the mods according to the desired profile")
 
 # ================================mod subcommand================================
 
@@ -498,21 +620,6 @@ def unregisterMod(argv) -> int:
 	dumpConfig(config)
 	print("Removed {}".format(argv.name))
 
-# ===============================cleanup command================================
-def cleanup(argv) -> int:
-	print("cleaning up...")
-	
-	exit(0)
-
-# =================================init command=================================
-def init(argv) -> int:
-	if os.path.exists(TABLECLOTH_CONFIG_PATH):
-		print(TABLECLOTH_CONFIG_PATH + " already exists.")
-		exit(1)
-	print("Creating original config")
-	dumpConfig(getDefaultConfig())
-	print("Created config file ({})".format(TABLECLOTH_CONFIG_PATH))
-
 # ===============================serve-up command===============================
 
 #TODO: Add a --clean param that cleans the mods folder before doing the download
@@ -588,10 +695,17 @@ def main():
 		argparser.parse_args(['-h'])
 		return
 
+	print("Tablecloth Alpha 0.2")
+
+	#search = ModrinthHostService()
+	#modId = search.FindMod("phosphor")["id"]
+	#version = search.FindModVersion("1.19.4", modId, "mc1.19.x-0.8.1")
+
 	config = TableclothConfig()
 	args = argparser.parse_args()
 	args.func(args, config)
-	print(json.dumps(config.ToDict(), indent=2))
+	if args.showResult or args.dry_run:
+		print(json.dumps(config.ToDict(), indent=2))
 
 if __name__ == "__main__":
 	main()

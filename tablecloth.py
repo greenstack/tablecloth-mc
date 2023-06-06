@@ -32,6 +32,7 @@ import copy
 import json
 import os
 import requests
+import subprocess
 import sys
 
 TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
@@ -307,17 +308,7 @@ class ModHostService:
 
 	# Used by serve-up
 	def DownloadMods(self, profile: TableclothProfile):
-		for mod, info in profile.Mods().items():
-			print("Downloading " + mod)
-			for file in info["modrinth"]["files"]:
-				modJarResponse = requests.get(file["url"]) 
-				if not modJarResponse.status_code == 200:
-					# TODO: Better name
-					print("Couldn't download file for mod {mod.name}")
-					continue
-				path = "mods/" + file["filename"]
-				open(path, 'wb').write(modJarResponse.content)
-				print("Downloaded mod file to " + path)
+		pass
 
 class ModrinthHostService(ModHostService):
 	def __init__(self):
@@ -364,6 +355,19 @@ class ModrinthHostService(ModHostService):
 			# Will be used to check for updates... eventually
 			"publish_date": modInfo["date_published"],
 		}
+	
+	def DownloadMods(self, profile: TableclothProfile):
+		for mod, info in profile.Mods().items():
+			print("Downloading " + mod)
+			for file in info["modrinth"]["files"]:
+				modJarResponse = requests.get(file["url"]) 
+				if not modJarResponse.status_code == 200:
+					# TODO: Better name
+					print("Couldn't download file for mod {mod.name}")
+					continue
+				path = "mods/" + file["filename"]
+				open(path, 'wb').write(modJarResponse.content)
+				print("Downloaded mod file to " + path)
 
 # Base class for all actions in tablecloth.
 class TableclothActionBase:
@@ -521,7 +525,14 @@ current_subparser.add_argument("modVersion", help="The version of the mod.")
 # END MOD ACTIONS
 # ==============================================================================
 
-current_subparser = subparsers.add_parser("launch", help="[WIP] Launches the Minecraft server")
+class LaunchAction(TableclothActionBase):
+	def Perform(self) -> None:
+		subprocess.call([
+			"java",
+		])
+
+current_subparser = subparsers.add_parser("launch", help="Launches the Minecraft server")
+current_subparser.set_defaults(func = CallbackFromClass(LaunchAction))
 
 class ServeUpAction(ProfileRequiredActionBase):
 	def Perform(self) -> None:

@@ -95,7 +95,8 @@ class TableclothArgparseFactory:
 	
 # Represents a Tablecloth installation profile.
 class TableclothProfile:
-	def __init__(self, mcVer:str = DEFAULT_MINECRAFT_VERSION, fabricLoaderVer:str = DEFAULT_FABRIC_LOADER, fabricInstallerVer:str = DEFAULT_FABRIC_INSTALLER) -> None:
+	def __init__(self, name: str, mcVer:str = DEFAULT_MINECRAFT_VERSION, fabricLoaderVer:str = DEFAULT_FABRIC_LOADER, fabricInstallerVer:str = DEFAULT_FABRIC_INSTALLER) -> None:
+		self.__name = name
 		self.__minecraftVersion = mcVer
 		self.__fabricLoaderVersion = fabricLoaderVer
 		self.__fabricInstallerVersion = fabricInstallerVer
@@ -103,6 +104,9 @@ class TableclothProfile:
 		self.__jarName = None
 		self.__javaPath = None
 		self.__javaArgs = []
+
+	def Name(self):
+		return self.__name
 
 	def SetMinecraftVersion(self, minecraftVersion: str) -> None:
 		self.__minecraftVersion = minecraftVersion
@@ -123,9 +127,10 @@ class TableclothProfile:
 	def GetFabricLoaderVersion(self) -> str:
 		return self.__fabricLoaderVersion
 
-	def FromDict(data):
+	def FromDict(name: str, data: dict):
 		#todo: data validation
 		profile = TableclothProfile(
+			name,
 			data['minecraft']['version'],
 			data["fabric"]["loader"],
 			data["fabric"]["installer"]
@@ -211,7 +216,7 @@ class TableclothConfig:
 	def __defaultConfig() -> dict:
 		return {
 			CONFIG_PROFILES: {
-				"default": TableclothProfile()
+				"default": TableclothProfile("default")
 			},
 			CONFIG_SETTINGS: {
 				"assume-current-profile": True,
@@ -240,7 +245,7 @@ class TableclothConfig:
 			config = json.load(configFile)
 		profiles = {}
 		for profile, data in config[CONFIG_PROFILES].items():
-			profiles[profile] = TableclothProfile.FromDict(data)
+			profiles[profile] = TableclothProfile.FromDict(profile, data)
 		config.pop(CONFIG_PROFILES)
 		config[CONFIG_PROFILES] = profiles
 		return config
@@ -390,7 +395,7 @@ class ProfileRequiredActionBase(TableclothActionBase):
 				exit(1)
 
 	def GetProfile(self):
-		return self._config.GetProfile(self._profileName)
+		return self._config.GetProfile(self.profile.Name())
 
 def CreateActionGroup(argparser: argparse.ArgumentParser, subparsers: argparse._SubParsersAction, groupName, groupHelp):
 	parser = subparsers.add_parser(groupName, help=groupHelp)

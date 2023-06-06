@@ -607,50 +607,6 @@ def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: s
 	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA1] = versionInfo["hashes"]["sha1"]
 	return True
 
-# ===============================serve-up command===============================
-
-#TODO: Add a --clean param that cleans the mods folder before doing the download
-#TODO: Add a --dry-run param that will show the user what this command will do
-
-def performUpdate(args) -> int:	
-	config = getConfig()
-	
-	mcVer = config.get("minecraft-version")
-	fabricConfig = config.get("fabric")
-	loaderVer = fabricConfig.get("loader-version")
-	installerVer = fabricConfig.get("installer-version")
-
-	installerUrl = "https://meta.fabricmc.net/v2/versions/loader/{}/{}/{}/server/jar".format(mcVer, loaderVer, installerVer)
-	
-	if (config.get(CONFIG_SERVER_JAR_NAME)):
-		serverJarName = config.get(CONFIG_SERVER_JAR_NAME)
-	else:
-		serverJarName = "fabric-server-mc.{}-loader.{}-launcher.{}.jar".format(mcVer, loaderVer, installerVer)
-
-	print("Getting fabric server jar from " + installerUrl)
-	print('Naming server jar "' + serverJarName + '"')
-
-	# TODO: Verify that things went right
-	serverJar = requests.get(installerUrl).content
-	open(serverJarName, 'wb').write(serverJar)
-
-	print("Server jar created. You will need to manually change its properties.")
-	
-	if not os.path.exists("mods"):
-		os.mkdir("mods")
-
-	print("Installing mods...")
-	for mod in config.get(CONFIG_MODS).values():
-		print("Downloading {} version {}".format(mod["name"], mod["version"]))
-		serverJarResponse = requests.get(mod["modrinth"]["download-url"])
-		if not serverJarResponse.status_code == 200:
-			print("Could not download the mod (HTTP {})".format(serverJarResponse.status_code))
-			continue
-		path = "mods/" + mod["modrinth"]["filename"]
-		open(path, 'wb').write(serverJarResponse.content)
-		print("Mod saved to " + path)
-
-	exit(0)
 
 
 # ===========================config-versions command============================
@@ -684,16 +640,13 @@ def main():
 
 	print("Tablecloth Alpha 0.2")
 
-	#search = ModrinthHostService()
-	#modId = search.FindMod("phosphor")["id"]
-	#version = search.FindModVersion("1.19.4", modId, "mc1.19.x-0.8.1")
-
 	config = TableclothConfig()
 	args = argparser.parse_args()
 	args.func(args, config)
 	if args.showResult or args.dry_run:
 		print(json.dumps(config.ToDict(), indent=2))
 	if not args.dry_run:
+		# TODO: Only do this if the action performed modifies the config.
 		config.Save()
 
 if __name__ == "__main__":

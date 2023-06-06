@@ -222,8 +222,10 @@ class TableclothConfig:
 				"assume-current-profile": True,
 				"current-profile": "default",
 				"launch": {
-					"jar-name": None,
+					"jar-name": "server.jar",
 					"java-path": None,
+					"min-ram": "1G",
+					"max-ram": "2G",
 					"java-args": []
 				},
 				"validation": {
@@ -253,6 +255,9 @@ class TableclothConfig:
 	def Save(self):
 		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
 			json.dump(self.ToDict(), configFile)
+
+	def GetLaunchInfo(self):
+		return self.__config[CONFIG_SETTINGS]["launch"]
 
 	def AddProfile(self, profileName: str, mcVersion: str, fabLoaderVer: str, fabInstallerVer: str):
 		self.__config[CONFIG_PROFILES][profileName] = TableclothProfile(mcVersion, fabLoaderVer, fabInstallerVer)
@@ -287,6 +292,9 @@ class TableclothConfig:
 
 	def GetProfileNames(self) -> list:
 		return self.__config[CONFIG_PROFILES].keys()
+
+	def GetDefaultJarName(self) -> str:
+		return self.__config[CONFIG_SETTINGS]["launch"][CONFIG_SERVER_JAR_NAME]
 
 	def ToDict(self) -> dict:
 		config = copy.deepcopy(self.__config)
@@ -531,10 +539,31 @@ current_subparser.add_argument("modVersion", help="The version of the mod.")
 # ==============================================================================
 
 class LaunchAction(TableclothActionBase):
+
+	def __craftLaunchArgs(self) -> list:
+		config = self._config
+		javaArgs = config.GetLaunchInfo()
+		args = []
+
+		#TODO: Ensure that these values are valid.
+		if "min-ram" in javaArgs:
+			print("Using {} as the minimum ram".format(javaArgs["min-ram"]))
+			args.append("-Xms{}".format(javaArgs["min-ram"]))
+		if "max-ram" in javaArgs:
+			print("Using {} as the maximum ram".format(javaArgs["max-ram"]))
+			args.append("-Xmx{}".format(javaArgs["max-ram"]))
+
+		# At present, these must be added manually to config. Not great at all.
+		for arg in javaArgs["java-args"]:
+			args.append[arg]
+
+		args += ["-jar", config.GetDefaultJarName(), "--nogui"]
+		return args
+
 	def Perform(self) -> None:
-		subprocess.call([
-			"java",
-		])
+		print("Starting server...")
+		complete = subprocess.run(["java"] + self.__craftLaunchArgs())
+		print("Server run aborted (return code {}). Check the server logs for more info.".format(complete.returncode))
 
 current_subparser = subparsers.add_parser("launch", help="Launches the Minecraft server")
 current_subparser.set_defaults(func = CallbackFromClass(LaunchAction))

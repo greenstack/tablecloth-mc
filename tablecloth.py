@@ -113,8 +113,14 @@ class TableclothProfile:
 	def SetFabricInstallerVersion(self, fabricInstallerVersion: str) -> None:
 		self.__fabricInstallerVersion = fabricInstallerVersion
 
+	def GetFabricInstallerVersion(self) -> str:
+		return self.__fabricInstallerVersion
+
 	def SetFabricLoaderVersion(self, fabricLoaderVersion: str) -> None:
 		self.__fabricLoaderVersion = fabricLoaderVersion
+
+	def GetFabricLoaderVersion(self) -> str:
+		return self.__fabricLoaderVersion
 
 	def FromDict(data):
 		#todo: data validation
@@ -125,13 +131,16 @@ class TableclothProfile:
 		)
 
 		for mod, settings in data["mods"].items():
-			profile.AddMod(mod, settings["version"], settings["modrinth"])
+			profile.__deserializeMod(mod, settings["version"], settings["modrinth"])
 
 		profile.SetJarName(data["overrides"]["jar-name"])
 		profile.SetJavaPath(data["overrides"]["java-path"])
 		profile.__javaArgs = data["overrides"]["java-args"]
 
 		return profile
+
+	def Mods(self) -> dict:
+		return self.__mods
 
 	def ToDict(self) -> dict:
 		return {
@@ -150,6 +159,11 @@ class TableclothProfile:
 			}
 		}
 		
+	def __deserializeMod(self, modName, version, hostInfo) -> None:
+		self.__mods[modName] = {
+			"version": version,
+			"modrinth": hostInfo
+		}
 
 	def AddMod(self, modName, version) -> None:
 		self.__mods[modName] = {
@@ -293,14 +307,23 @@ class ModHostService:
 
 	# Used by serve-up
 	def DownloadMods(self, profile: TableclothProfile):
-		pass
-		
+		for mod, info in profile.Mods().items():
+			print("Downloading " + mod)
+			for file in info["modrinth"]["files"]:
+				modJarResponse = requests.get(file["url"]) 
+				if not modJarResponse.status_code == 200:
+					# TODO: Better name
+					print("Couldn't download file for mod {mod.name}")
+					continue
+				path = "mods/" + file["filename"]
+				open(path, 'wb').write(modJarResponse.content)
+				print("Downloaded mod file to " + path)
 
 class ModrinthHostService(ModHostService):
 	def __init__(self):
 		super().__init__("https://api.modrinth.com/v2/")
 
-	def FindModVersion(self, gameVersion: str, modName: str, modVersion: str) -> dict:
+	def __findModVersion(self, gameVersion: str, modName: str, modVersion: str) -> dict:
 		#TODO: Want to use Modrinth's search api. Should let us get this easier.
 		versionResponse = requests.get(
 			self.GetApiUrl() + "project/" + modName + "/version",
@@ -332,7 +355,7 @@ class ModrinthHostService(ModHostService):
 			return versionList
 
 	def GetHostModInfo(self, gameVersion: str, modName: str, modVersion: str):
-		modInfo = self.FindModVersion(gameVersion, modName, modVersion)
+		modInfo = self.__findModVersion(gameVersion, modName, modVersion)
 
 		return {
 			"project-id": modInfo["project_id"],
@@ -361,6 +384,9 @@ class ProfileRequiredActionBase(TableclothActionBase):
 			if self.profile is None:
 				print("config.assume-current-profile is set to FALSE. A profile must be provided")
 				exit(1)
+
+	def GetProfile(self):
+		return self._config.GetProfile(self._profileName)
 
 def CreateActionGroup(argparser: argparse.ArgumentParser, subparsers: argparse._SubParsersAction, groupName, groupHelp):
 	parser = subparsers.add_parser(groupName, help=groupHelp)
@@ -457,6 +483,15 @@ class ModActionBase(ProfileRequiredActionBase):
 	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
 		super().__init__(argv, config)
 
+class AddModAction(ModActionBase):
+	def Perform(self) -> None:
+		self.GetProfile().AddMod(self._argv.modName, self._argv.modVersion)
+
+class ListModsAction(ModActionBase):
+	def Perform(self) -> None:
+		for mod in self.GetProfile().ListMods():
+			print(mod)
+
 mod_parsers = CreateActionGroup(
 	argparser,
 	subparsers,
@@ -464,16 +499,19 @@ mod_parsers = CreateActionGroup(
 	"Manages mods for a profile"
 )
 
-current_subparser = mod_parsers.add_parser("add", help="[WIP] Adds the mod to the profile. Doesn't download the mod, however.*")
+current_subparser = mod_parsers.add_parser("add", help="Adds the mod to the profile. Doesn't download the mod, however.")
 current_subparser.add_argument("modName", help="The name of the mod to add.")
+# Maybe someday we want to make this optional - help the user gind what they want - but not today
 current_subparser.add_argument("modVersion", help="The version of the mod to add.")
+current_subparser.set_defaults(func = CallbackFromClass(AddModAction))
 
-current_subparser = mod_parsers.add_parser("list", help="[WIP] Lists all the mods in the profile.")
+current_subparser = mod_parsers.add_parser("list", help="Lists all the mods in the profile.")
+current_subparser.set_defaults(func = CallbackFromClass(ListModsAction))
 
 current_subparser = mod_parsers.add_parser("remove", help="[WIP] Removes the mod from the profile.")
 current_subparser.add_argument("modName", help="The name of the mod to remove.")
 
-current_subparser = mod_parsers.add_parser("search", help="[WIP] Reports each profile that has the mod.")
+current_subparser = mod_parsers.add_parser("find", help="[WIP] Reports each profile that has the mod.")
 current_subparser.add_argument("modName", help="The name of the mod to search for.")
 
 current_subparser = mod_parsers.add_parser("setver", help="[WIP] Sets the version of the mod.")
@@ -485,68 +523,30 @@ current_subparser.add_argument("modVersion", help="The version of the mod.")
 
 current_subparser = subparsers.add_parser("launch", help="[WIP] Launches the Minecraft server")
 
+class ServeUpAction(ProfileRequiredActionBase):
+	def Perform(self) -> None:
+		profile = self._config.GetCurrentProfile()
+		gameVersion = profile.GetMinecraftVersion()
+		loaderVersion = profile.GetFabricLoaderVersion()
+		installerVersion = profile.GetFabricInstallerVersion()
+
+		fabricInstallerUrl = "https://meta.fabricmc.net/v2/versions/loader/{}/{}/{}/server/jar".format(gameVersion, loaderVersion, installerVersion)
+		downloadName = "fabric-server-mc.{}-loader.{}-launcher.{}.jar".format(gameVersion, loaderVersion, installerVersion)
+
+		serverJar = requests.get(fabricInstallerUrl).content
+		open(downloadName, 'wb').write(serverJar)
+
+		print("Server jar created. You may need to change its permissions.")
+		if not os.path.exists("mods"):
+			os.mkdir("mods")
+
+		print("Installing mods...")
+		modrinthService = ModrinthHostService()
+		modrinthService.DownloadMods(profile)
+		print("Done!")
+
 current_subparser = subparsers.add_parser("serve-up", help="[WIP] Downloads the mods according to the desired profile")
-
-# ================================mod subcommand================================
-
-def addCommonModParameters(parser, addDownload: bool) -> None:
-	parser.add_argument("name", type=str, help="The name of the mod")
-	parser.add_argument("version", type=str, help="The version of the mod")
-	if addDownload:
-		parser.add_argument('--download', help="Specify this flag if you want to immediately download the mod")
-
-# ================================addmod command================================
-
-def findMod(modName: str) -> dict:
-	projectRequest = requests.get(MODRINTH_PROJECT_API.format(modName))
-	if not projectRequest.status_code == 200:
-		print("Could not retrieve project {}: HTTP {}".format(modName, projectRequest.status_code))
-		exit(projectRequest.status_code)
-	return projectRequest.json()
-
-def findModVersion(modName: str, modVersion: str) -> dict:
-	config = getConfig()
-
-	versionResponse = requests.get(MODRINTH_VERSION_API.format(modName),
-		params = {
-			"loaders": ["fabric"],
-			"game_versions": [config[CONFIG_MINECRAFT_VERSION]],
-		}
-	)
-	if (not versionResponse.status_code == 200):
-		print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
-		exit(versionResponse.status_code)
-	
-	versionData = versionResponse.json()
-	
-	if len(versionData) == 1:
-		version = versionData[0]
-	else:
-		for versionInfo in versionData:
-			if versionInfo["version_number"] == modVersion:
-				version = versionInfo
-				break
-	return version
-
-def addModToConfig(config: dict, modName: str, modInfo: dict, overwrite: bool) -> bool:
-	if modName in config[CONFIG_MODS].keys() and not overwrite:
-		return False
-
-	config[CONFIG_MODS][modName] = {
-		CONFIG_MOD_NAME: modName,
-		CONFIG_MOD_VERSION: "",
-		CONFIG_MOD_MODRINTH: {
-			CONFIG_MOD_MODRINTH_PROJECT_ID: modInfo["id"],
-			CONFIG_MOD_MODRINTH_VERSION_ID: "",
-			CONFIG_MOD_MODRINTH_DOWNLOAD_URL: "",
-			CONFIG_MOD_MODRINTH_FILENAME: "",
-			CONFIG_MOD_MODRINTH_HASHES: {
-				CONFIG_MOD_MODRINTH_HASHES_SHA512: "",
-				CONFIG_MOD_MODRINTH_HASHES_SHA1: "",
-			}
-		}
-	}
-	return True
+current_subparser.set_defaults(func = CallbackFromClass(ServeUpAction))
 
 def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: str, versionInfo: dict) -> bool:
 	if not config[CONFIG_MODS][modName]:
@@ -561,64 +561,6 @@ def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: s
 	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA512] = versionInfo["hashes"]["sha512"]
 	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA1] = versionInfo["hashes"]["sha1"]
 	return True
-
-def registerMod(argv) -> int:
-	print("Searching for {} version {}".format(argv.name, argv.version))
-
-	projectDataJson = findMod(argv.name)
-
-	print("Found {} (project id {}) on Modrinth".format(argv.name, projectDataJson["id"]))
-	
-	# 1. GET /project/slug/version (be sure to put the minecraft-version in the 
-	# 		query to get only versions that we can run and that loaders is set to fabric)
-	# 2. Iterate over them. Check if version_number is the same
-	# 3. Iterate over each version's game_versions to make sure it matches
-	# 4. If it does, then go to that version's files key.
-	# 5. In that version's files key, iterate over the array. Try to find the
-	#			primary file (key: "primary"; it will be true) and get the url; if it's
-	#			the only one, use that.
-	
-	config = getConfig()
-
-	version = findModVersion(argv.name, argv.version)
-
-	print("Found version {} for the mod!".format(argv.version))
-	
-	for file in version["files"]:
-		if file["primary"]:
-			versionFile = file
-		else:
-			versionFile = file
-
-	success = addModToConfig(config, argv.name, projectDataJson, False)
-	if not success:
-		print("Did not register the mod.")
-		exit(1)
-	cfgSetModVersion(config, argv.name, argv.version, version["id"], versionFile)
-	
-	dumpConfig(config)
-	print("Registered {}. Run `tablecloth serve-up` to download it.".format(argv.name))
-
-	exit(0)
-
-# ==============================setmodver command===============================
-
-def setModVersion(argv):
-	print("Setting mod version")
-# =============================mod remove command===============================
-# TODO: Add positional arugment --remove to uninstall the mod immediately
-
-def unregisterMod(argv) -> int:
-	config = getConfig()
-
-	if not argv.name in config[CONFIG_MODS].keys():
-		print("Mod {} isn't registered".format(argv.name))
-		exit(1)
-
-	config[CONFIG_MODS].pop(argv.name)
-
-	dumpConfig(config)
-	print("Removed {}".format(argv.name))
 
 # ===============================serve-up command===============================
 
@@ -706,6 +648,8 @@ def main():
 	args.func(args, config)
 	if args.showResult or args.dry_run:
 		print(json.dumps(config.ToDict(), indent=2))
+	if not args.dry_run:
+		config.Save()
 
 if __name__ == "__main__":
 	main()

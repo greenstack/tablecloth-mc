@@ -591,7 +591,7 @@ current_subparser.set_defaults(func = CallbackFromClass(LaunchAction))
 
 class ServeUpAction(ProfileRequiredActionBase):
 	def Perform(self) -> None:
-		profile = self._config.GetCurrentProfile()
+		profile = self.GetProfile()
 		gameVersion = profile.GetMinecraftVersion()
 		loaderVersion = profile.GetFabricLoaderVersion()
 		installerVersion = profile.GetFabricInstallerVersion()

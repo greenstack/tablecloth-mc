@@ -447,7 +447,7 @@ def CallbackFromClass(action: type):
 	return lambda argv, config: action(argv, config).Perform()
 
 # ============================argument parser setup=============================
-argparser = argparse.ArgumentParser(prog="Tablecloth MC Alpha 0.2", description="A CLI-based Minecraft Server launcher and Fabric mod installer ([WIP] commands can't be used)", epilog="At present, config isn't saved. Tablecloth Alpha 0.2 isn't production ready yet.")
+argparser = argparse.ArgumentParser(prog="Tablecloth MC Alpha 0.2", description="A CLI-based Minecraft Server launcher and Fabric mod installer ([WIP] commands can't be used)")
 argparser.add_argument("--showResult", help="Displays the config when the command completes.", action="store_true")
 argparser.add_argument("--profile", "-p", help="The name of the profile to operate on or use. Ignored by the profile actions. If omitted, will use config.current-profile if config.assume-current-profile is true.")
 argparser.add_argument("--dry-run", help="[WIP] Performs a dry run and shows what the result would be without saving the config", action="store_true")
@@ -457,37 +457,38 @@ subparsers = argparser.add_subparsers()
 # PROFILE COMMANDS
 # ==============================================================================
 # Base class for profile-based actions. Work in progress; here to remind me
-class ProfileActionBase(TableclothActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
-		self._profileName = self._argv.profileName
+class ProfileActions:
+	class __ProfileActionBase(TableclothActionBase):
+		def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+			super().__init__(argv, config)
+			self._profileName = self._argv.profileName
 
-class CreateProfileAction(ProfileActionBase):
-	def Perform(self) -> None:
-		# Check for argument values in args
-		# If they're not there, ask user for them
-		minecraftVersion = self._argv.mcversion or input("Enter Minecraft version:")
-		fabricLoaderVersion = self._argv.fabricloader or input("Fabric Loader version:")
-		fabricInstallerVersion = self._argv.fabricinstaller or input("Fabric Installer version:")
+	class Create(__ProfileActionBase):
+		def Perform(self) -> None:
+			# Check for argument values in args
+			# If they're not there, ask user for them
+			minecraftVersion = self._argv.mcversion or input("Enter Minecraft version:")
+			fabricLoaderVersion = self._argv.fabricloader or input("Fabric Loader version:")
+			fabricInstallerVersion = self._argv.fabricinstaller or input("Fabric Installer version:")
 
-		self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
+			self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
 
-class CopyProfileAction(ProfileActionBase):
-	def Perform(self) -> None:
-		self._config.CopyProfile(self._profileName, self._argv.newProfile)
+	class Copy(__ProfileActionBase):
+		def Perform(self) -> None:
+			self._config.CopyProfile(self._profileName, self._argv.newProfile)
 
-class RenameProfileAction(ProfileActionBase):
-	def Perform(self) -> None:
-		self._config.RenameProfile(self._profileName, self._argv.newProfileName)
+	class Rename(__ProfileActionBase):
+		def Perform(self) -> None:
+			self._config.RenameProfile(self._profileName, self._argv.newProfileName)
 
-class RemoveProfileAction(ProfileActionBase):
-	def Perform(self) -> None:
-		self._config.DeleteProfile(self._profileName)
+	class Remove(__ProfileActionBase):
+		def Perform(self) -> None:
+			self._config.DeleteProfile(self._profileName)
 
-class ListProfilesAction(TableclothActionBase):
-	def Perform(self) -> None:
-		for profile in self._config.GetProfileNames():
-			print(profile)
+	class List(TableclothActionBase):
+		def Perform(self) -> None:
+			for profile in self._config.GetProfileNames():
+				print(profile)
 
 profile_parsers = CreateActionGroup(
 	argparser,
@@ -501,24 +502,24 @@ current_subparser.add_argument('profileName', metavar="Profile Name", help="The 
 current_subparser.add_argument('--mcversion', metavar="Minecraft Version", help='The version of Minecraft this profile uses', type=str)
 current_subparser.add_argument('--fabricloader', metavar="Fabric Loader", help="The version of the Fabric Loader this profile uses", type=str)
 current_subparser.add_argument('--fabricinstaller', metavar="Fabric Installer", help="The version of the Fabric installer this profile uses", type=str)
-current_subparser.set_defaults(func = CallbackFromClass(CreateProfileAction))
+current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.Create))
 
 current_subparser = profile_parsers.add_parser("copy", help="Copies one profile to another")
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the original profile", type=str)
 current_subparser.add_argument('newProfile', metavar="New Profile Name", help="The name of the new profile", type=str)
-current_subparser.set_defaults(func = CallbackFromClass(CopyProfileAction))
+current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.Copy))
 
 current_subparser = profile_parsers.add_parser("rename", help="Renames an existing profile")
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile", type=str)
 current_subparser.add_argument('newProfileName', metavar="Profile New Name", help="The new name of the profile", type=str)
-current_subparser.set_defaults(func = CallbackFromClass(RenameProfileAction))
+current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.Rename))
 
 current_subparser = profile_parsers.add_parser("remove", help="Removes a profile")
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile to remove", type=str)
-current_subparser.set_defaults(func = CallbackFromClass(RemoveProfileAction))
+current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.Remove))
 
 current_subparser = profile_parsers.add_parser("list", help="Lists all profiles")
-current_subparser.set_defaults(func = CallbackFromClass(ListProfilesAction))
+current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.List))
 # ==============================================================================
 # END PROFILE ACTIONS
 # ==============================================================================
@@ -527,21 +528,22 @@ current_subparser.set_defaults(func = CallbackFromClass(ListProfilesAction))
 # ==============================================================================
 # MOD ACTIONS
 # ==============================================================================
-class ModActionBase(ProfileRequiredActionBase):
-	def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
-		super().__init__(argv, config)
+class ModActions:
+	class __ModActionBase(ProfileRequiredActionBase):
+		def __init__(self, argv: argparse.Namespace, config: TableclothConfig) -> None:
+			super().__init__(argv, config)
 
-class AddModAction(ModActionBase):
-	def Perform(self) -> None:
-		self.GetProfile().AddMod(self._argv.modName, self._argv.modVersion)
-		#TODO: Config needs to pay attention to its profiles to mark itself dirty.
-		# Set up some observer pattern there.
-		self._config.MarkDirty()
+	class Add(__ModActionBase):
+		def Perform(self) -> None:
+			self.GetProfile().AddMod(self._argv.modName, self._argv.modVersion)
+			#TODO: Config needs to pay attention to its profiles to mark itself dirty.
+			# Set up some observer pattern there.
+			self._config.MarkDirty()
 
-class ListModsAction(ModActionBase):
-	def Perform(self) -> None:
-		for mod in self.GetProfile().ListMods():
-			print(mod)
+	class List(__ModActionBase):
+		def Perform(self) -> None:
+			for mod in self.GetProfile().ListMods():
+				print(mod)
 
 mod_parsers = CreateActionGroup(
 	argparser,
@@ -554,10 +556,10 @@ current_subparser = mod_parsers.add_parser("add", help="Adds the mod to the prof
 current_subparser.add_argument("modName", help="The name of the mod to add.")
 # Maybe someday we want to make this optional - help the user gind what they want - but not today
 current_subparser.add_argument("modVersion", help="The version of the mod to add.")
-current_subparser.set_defaults(func = CallbackFromClass(AddModAction))
+current_subparser.set_defaults(func = CallbackFromClass(ModActions.Add))
 
 current_subparser = mod_parsers.add_parser("list", help="Lists all the mods in the profile.")
-current_subparser.set_defaults(func = CallbackFromClass(ListModsAction))
+current_subparser.set_defaults(func = CallbackFromClass(ModActions.List))
 
 current_subparser = mod_parsers.add_parser("remove", help="[WIP] Removes the mod from the profile.")
 current_subparser.add_argument("modName", help="The name of the mod to remove.")

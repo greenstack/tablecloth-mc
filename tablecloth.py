@@ -301,13 +301,25 @@ class TableclothConfig:
 
 	def GetCurrentProfile(self) -> TableclothProfile:
 		if self.__config[CONFIG_SETTINGS]["assume-current-profile"]:
-			return self.__config[CONFIG_PROFILES][self.GetCurrentProfileName()]
+			return self.GetProfile(self.GetCurrentProfileName())
+		else:
+			print("Can't get default profile: assume-current-profile is FALSE. (The current profile is {})".format(self.GetCurrentProfileName()))
+			exit(1)
 
 	def GetProfileNames(self) -> list:
 		return self.__config[CONFIG_PROFILES].keys()
 
 	def GetDefaultJarName(self) -> str:
-		return self.__config[CONFIG_SETTINGS]["launch"][CONFIG_SERVER_JAR_NAME]
+		name = self.__config[CONFIG_SETTINGS]["launch"][CONFIG_SERVER_JAR_NAME]
+
+		# Treat empty/whitespace names as not names
+		if not name or name == "" or str(name).isspace():
+			return None
+		# Force name to have jar at the end
+		elif name[-4:] != ".jar":
+			name += ".jar"
+
+		return name
 
 	def ToDict(self) -> dict:
 		config = copy.deepcopy(self.__config)
@@ -597,7 +609,11 @@ class ServeUpAction(ProfileRequiredActionBase):
 		installerVersion = profile.GetFabricInstallerVersion()
 
 		fabricInstallerUrl = "https://meta.fabricmc.net/v2/versions/loader/{}/{}/{}/server/jar".format(gameVersion, loaderVersion, installerVersion)
-		downloadName = "fabric-server-mc.{}-loader.{}-launcher.{}.jar".format(gameVersion, loaderVersion, installerVersion)
+		jarName = self._config.GetDefaultJarName()
+		if jarName is None:
+			downloadName = "fabric-server-mc.{}-loader.{}-launcher.{}.jar".format(gameVersion, loaderVersion, installerVersion)
+		else:
+			downloadName = jarName
 
 		serverJar = requests.get(fabricInstallerUrl).content
 		open(downloadName, 'wb').write(serverJar)

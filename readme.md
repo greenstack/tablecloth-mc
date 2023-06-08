@@ -21,12 +21,12 @@ edit it yourself or you can use Tablecloth to manage it as well.
 # Settings
 At present, these settings can only be modified manually (except current-profile). Items with \* haven't been implemented yet.
 
- - **Assume Current Profile**\*: Sets whether Tablecloth should assume that the currently set profile is the profile to execute on. If false, then each command must identify which profile it's using.
- - **Current Profile**\*: The name of the current profile.
+ - **Assume Current Profile**: Sets whether Tablecloth should assume that the currently set profile is the profile to execute on. If false, then each command must identify which profile it's using.
+ - **Current Profile**: The name of the current profile.
  - **Launch**\*: Parameters for launching the server using Tablecloth. This feature is a wishlist item that I'm just listing here before I can put it in as an issue on GitHub.
-   - **Jar Name**\*: The name of the Jar to launch. If null, uses the default jar.
+   - **Jar Name**: The name of the Jar to launch. If null, uses the default jar.
 	 - **Java Path**\*: The path to the Java executable. If null, uses the system value for Java.
-	 - **Java Args**\*: An array of args to pass to Java.
+	 - **Java Args**: An array of args to pass to Java.
  - **Validation**\*: Settings to validate the integrity of downloaded files.
    - **Hashes**\*: Ensures that the hashes match those reported by Modrinth.
 	 - **Size**\*: Ensures that the file size matches that reported by Modrinth.
@@ -44,7 +44,7 @@ Checks for mods that have been removed and deletes them.
 None for now.
 
 ## `launch`
- Starts the Minecraft Server.
+ tarts the Minecraft Server. This will always use the default profile.
 
 ## `mod`\*
 Provides actions for working with mods in a profile.
@@ -121,12 +121,10 @@ Manages various config options. With no arguments, `config` will report the defa
 # Roadmap
 ## Basic Functionality
 These features are needed to say that Tablecloth is in the beta stage.
- - Profiles
+ - Profiles (done)
  - Download mod dependencies
  - `tablecloth.lock.json`: A file that changes are committed to so users have a fallback if server configuration goes haywire.
-   - Would be saved through the `tablecloth commit` action.
- - `tablecloth.cache.json`: A file that stores the hashes of the currently downloaded files. The idea is that if serve-up is run and a mod has already been downloaded, Tablecloth will skip downloading that mod. This will be updated with each run of `serve-up` and `cleanup` (if needed).
- - Launch the server jar through Tablecloth.
+ - Launch the server jar through Tablecloth. (done)
 
 ## Future Features
  - Figure out how to get most current version of Minecraft for default config

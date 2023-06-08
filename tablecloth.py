@@ -137,7 +137,7 @@ class TableclothProfile:
 		)
 
 		for mod, settings in data["mods"].items():
-			profile.__deserializeMod(mod, settings["version"], settings["modrinth"])
+			profile.__deserializeMod(mod, settings["version"], settings["enabled"], settings["modrinth"])
 
 		profile.SetJarName(data["overrides"]["jar-name"])
 		profile.SetJavaPath(data["overrides"]["java-path"])
@@ -165,10 +165,11 @@ class TableclothProfile:
 			}
 		}
 		
-	def __deserializeMod(self, modName, version, hostInfo) -> None:
+	def __deserializeMod(self, modName, version, enabled, hostInfo) -> None:
 		self.__mods[modName] = {
 			"version": version,
-			"modrinth": hostInfo
+			"enabled": enabled,
+			"modrinth": hostInfo,
 		}
 
 	def AddMod(self, modName, version) -> None:
@@ -383,12 +384,15 @@ class ModrinthHostService(ModHostService):
 	
 	def DownloadMods(self, profile: TableclothProfile):
 		for mod, info in profile.Mods().items():
+			if not info["enabled"]:
+				print("Skipping disabled mod [{}]".format(mod))
+				continue
 			print("Downloading " + mod)
 			for file in info["modrinth"]["files"]:
 				modJarResponse = requests.get(file["url"]) 
 				if not modJarResponse.status_code == 200:
 					# TODO: Better name
-					print("Couldn't download file for mod {mod.name}")
+					print("Couldn't download file for mod [{}]: HTTP {}".format(mod, modJarResponse.status_code))
 					continue
 				path = "mods/" + file["filename"]
 				open(path, 'wb').write(modJarResponse.content)
@@ -620,31 +624,6 @@ def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: s
 	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA512] = versionInfo["hashes"]["sha512"]
 	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA1] = versionInfo["hashes"]["sha1"]
 	return True
-
-
-
-# ===========================config-versions command============================
-def configVersions(args, config: TableclothConfig) -> int:
-	if not len(sys.argv) > 2:
-		#config_versions_subparser.parse_args(['-h'])
-		#print("Must define a version for either --minecraft, --fabric-loader, or --fabric-installer")
-		exit(1)
-
-	config = getConfig()
-	if (args.minecraft):
-		config[CONFIG_MINECRAFT_VERSION] = args.minecraft
-		print("Set Minecraft version to " + args.minecraft)
-	if (args.fabric_loader):
-		config[CONFIG_FABRIC][CONFIG_FABRIC_LOADER_VERSION] = args.fabric_loader
-		print("Set Fabric loader version to" + args.fabric_loader)
-	if (args.fabric_installer):
-		config[CONFIG_FABRIC][CONFIG_FABRIC_INSTALLER_VERSION] = args.fabric_installer
-		print("Set Fabric installer version to " + args.fabric_installer)
-
-	config.Save()
-
-	exit(0)
-
 
 # ================================main function=================================
 def main():

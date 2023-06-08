@@ -630,20 +630,6 @@ class ServeUpAction(ProfileRequiredActionBase):
 current_subparser = subparsers.add_parser("serve-up", help="[WIP] Downloads the mods according to the desired profile")
 current_subparser.set_defaults(func = CallbackFromClass(ServeUpAction))
 
-def cfgSetModVersion(config: dict, modName: str, versionId: str, modVersionId: str, versionInfo: dict) -> bool:
-	if not config[CONFIG_MODS][modName]:
-		return False
-
-	modConfig = config[CONFIG_MODS][modName]
-	modConfig[CONFIG_MOD_VERSION] = versionId
-	modrinthConfig = modConfig[CONFIG_MOD_MODRINTH]
-	modrinthConfig[CONFIG_MOD_MODRINTH_VERSION_ID] = modVersionId
-	modrinthConfig[CONFIG_MOD_MODRINTH_DOWNLOAD_URL] = versionInfo["url"]
-	modrinthConfig[CONFIG_MOD_MODRINTH_FILENAME] = versionInfo["filename"]
-	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA512] = versionInfo["hashes"]["sha512"]
-	modrinthConfig[CONFIG_MOD_MODRINTH_HASHES][CONFIG_MOD_MODRINTH_HASHES_SHA1] = versionInfo["hashes"]["sha1"]
-	return True
-
 # ================================main function=================================
 def main():
 	if (len(sys.argv) == 1):

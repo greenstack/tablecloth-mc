@@ -263,7 +263,8 @@ class TableclothConfig:
 
 	def Save(self):
 		with open(TABLECLOTH_CONFIG_PATH, 'w') as configFile:
-			json.dump(self.ToDict(), configFile)
+			# We indent because we need the config to be more easily human-readable
+			json.dump(self.ToDict(), configFile, indent=4)
 
 	def GetLaunchInfo(self):
 		return self.__config[CONFIG_SETTINGS]["launch"]
@@ -629,7 +630,7 @@ class ServeUpAction(ProfileRequiredActionBase):
 		modrinthService.DownloadMods(profile)
 		print("Done!")
 
-current_subparser = subparsers.add_parser("serve-up", help="[WIP] Downloads the mods according to the desired profile")
+current_subparser = subparsers.add_parser("serve-up", help="Downloads the mods according to the desired profile")
 current_subparser.set_defaults(func = CallbackFromClass(ServeUpAction))
 
 # ================================main function=================================

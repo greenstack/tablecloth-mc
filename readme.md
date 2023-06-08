@@ -43,7 +43,7 @@ Checks for mods that have been removed and deletes them.
 **Parameters**  
 None for now.
 
-## `launch`\*
+## `launch`
  Starts the Minecraft Server.
 
 ## `mod`\*
@@ -51,10 +51,10 @@ Provides actions for working with mods in a profile.
 
 If the mod name is provided as the only argument, this action will give all relevant data.
 
-### `mod add`\*
+### `mod add`
 Adds the mod to the profile (but doesn't add the jar file yet).
 
-### `mod list`\*
+### `mod list`
 Prints all mods that are a part of the profile.
 
 ### `mod remove`\*

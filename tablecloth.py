@@ -385,13 +385,16 @@ class ModrinthHostService(ModHostService):
 	def DownloadMods(self, profile: TableclothProfile):
 		for mod, info in profile.Mods().items():
 			if not info["enabled"]:
-				print("Skipping disabled mod [{}]".format(mod))
+				# TODO: I don't want to remove them because files required by multiple
+				# mods may exist here. Probably need to map files to the mods that need
+				# them - probably an issue for when tablecloth.lock is introduced here
+				print("Skipping disabled mod [{}]. Jars associated with this mod may still be present, however.".format(mod))
 				continue
+
 			print("Downloading " + mod)
 			for file in info["modrinth"]["files"]:
 				modJarResponse = requests.get(file["url"]) 
 				if not modJarResponse.status_code == 200:
-					# TODO: Better name
 					print("Couldn't download file for mod [{}]: HTTP {}".format(mod, modJarResponse.status_code))
 					continue
 				path = "mods/" + file["filename"]

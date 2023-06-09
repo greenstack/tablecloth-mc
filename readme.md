@@ -44,7 +44,7 @@ Checks for mods that have been removed and deletes them.
 None for now.
 
 ## `launch`
- tarts the Minecraft Server. This will always use the default profile.
+Starts the Minecraft Server. This will always use the default profile.
 
 ## `mod`\*
 Provides actions for working with mods in a profile.
@@ -109,6 +109,15 @@ Renames a profile. If the profile is the `current-profile`, that setting will be
 
 ## `serve-up`
 Downloads the registered mods and updates Minecraft and Fabric. Note that at present, this will configure everything to match only the current-profile. If the current profile is changed, `serve-up` must be run again.
+
+## `set-version`
+Allows you to set the versions for Minecraft, Fabric Loader, and Fabric Installer.
+
+**Parameters**
+ - Positional:
+   - `--minecraft`, `-m`: The game version to use.
+   - `--fabric-loader`, `-l`: The Fabric Loader version to use.
+   - `--fabric-installer`, `-i`: The Fabric Installer version to use.
 
 **Parameters**  
 None for now.

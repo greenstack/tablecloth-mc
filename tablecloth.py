@@ -307,6 +307,7 @@ class TableclothConfig:
 		return self.__config[CONFIG_PROFILES].keys()
 
 	def GetDefaultJarName(self) -> str:
+		#TODO: If the name is null, this should get the default constructed name
 		name = self.__config[CONFIG_SETTINGS]["launch"][CONFIG_SERVER_JAR_NAME]
 
 		# Treat empty/whitespace names as not names
@@ -629,6 +630,29 @@ class ServeUpAction(ProfileRequiredActionBase):
 current_subparser = subparsers.add_parser("serve-up", help="Downloads the mods according to the desired profile")
 current_subparser.set_defaults(func = CallbackFromClass(ServeUpAction))
 
+class SetVersionAction(ProfileRequiredActionBase):
+	def Perform(self) -> None:
+		profile = self.GetProfile()
+		if self._argv.minecraft:
+			# TODO: This should go through the mods and disable the ones that are
+			# incompatible.
+			profile.SetMinecraftVersion(self._argv.minecraft)
+			self._config.MarkDirty()
+		
+		if self._argv.fabric_installer:
+			profile.SetFabricInstallerVersion(self._argv.fabric_installer)
+			self._config.MarkDirty()
+
+		if self._argv.fabric_loader:
+			profile.SetFabricLoaderVersion(self._argv.fabric_loader)
+			self._config.MarkDirty()
+
+current_subparser = subparsers.add_parser("set-version", help="Allows you to set the versions of Minecraft and the Fabric Installer/Loader")
+current_subparser.add_argument("--minecraft", "-m", help="The Minecraft version to use")
+current_subparser.add_argument("--fabric-installer", "-i", help="The Fabric Installer version to use")
+current_subparser.add_argument("--fabric-loader", "-l", help="The Fabric Loader version to use")
+current_subparser.set_defaults(func = CallbackFromClass(SetVersionAction))
+
 # ================================main function=================================
 def main():
 	if (len(sys.argv) == 1):
@@ -643,7 +667,6 @@ def main():
 	if args.showResult or args.dry_run:
 		print(json.dumps(config.ToDict(), indent=2))
 	if not args.dry_run and config.IsDirty():
-		# TODO: Only do this if the action performed modifies the config.
 		config.Save()
 
 if __name__ == "__main__":

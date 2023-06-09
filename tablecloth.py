@@ -308,12 +308,12 @@ class TableclothConfig:
 
 	def AddProfile(self, profileName: str, mcVersion: str, fabLoaderVer: str, fabInstallerVer: str):
 		self.__config[CONFIG_PROFILES][profileName] = TableclothProfile(mcVersion, fabLoaderVer, fabInstallerVer)
-		self.__MarkDirty()
+		self.MarkDirty()
 
 	def RenameProfile(self, oldProfileName: str, newProfileName: str):
 		self.__config[CONFIG_PROFILES][newProfileName] = self.__config[CONFIG_PROFILES][oldProfileName]
 		del self.__config[CONFIG_PROFILES][oldProfileName]
-		self.__MarkDirty()
+		self.MarkDirty()
 
 	def CopyProfile(self, oldProfileName: str, newProfileName: str) -> bool:
 		if newProfileName in self.__config[CONFIG_PROFILES]:
@@ -323,13 +323,13 @@ class TableclothConfig:
 			print("Profile {0:s} doesn't exist!".format(oldProfileName))
 			return False
 
-		self.__MarkDirty()
+		self.MarkDirty()
 		self.__config[CONFIG_PROFILES][newProfileName] = copy.deepcopy(self.__config[CONFIG_PROFILES][oldProfileName])
 		return True
 
 	def DeleteProfile(self, profileName: str) -> None:
 		self.__config[CONFIG_PROFILES].pop(profileName)
-		self.__MarkDirty()
+		self.MarkDirty()
 
 	def GetProfile(self, profileName: str) -> TableclothProfile:
 		return self.__config[CONFIG_PROFILES][profileName]
@@ -511,9 +511,9 @@ class ProfileActions:
 		def Perform(self) -> None:
 			# Check for argument values in args
 			# If they're not there, ask user for them
-			minecraftVersion = self._argv.mcversion or input("Enter Minecraft version:")
-			fabricLoaderVersion = self._argv.fabricloader or input("Fabric Loader version:")
-			fabricInstallerVersion = self._argv.fabricinstaller or input("Fabric Installer version:")
+			minecraftVersion = self._argv.minecraft or input("Enter Minecraft version:")
+			fabricLoaderVersion = self._argv.fabric_loader or input("Fabric Loader version:")
+			fabricInstallerVersion = self._argv.fabric_installer or input("Fabric Installer version:")
 
 			self._config.AddProfile(self._profileName, minecraftVersion, fabricLoaderVersion, fabricInstallerVersion)
 
@@ -543,9 +543,9 @@ profile_parsers = CreateActionGroup(
 
 current_subparser = profile_parsers.add_parser("add", help="Adds a profile")
 current_subparser.add_argument('profileName', metavar="Profile Name", help="The name of the profile to create", type=str)
-current_subparser.add_argument('--mcversion', metavar="Minecraft Version", help='The version of Minecraft this profile uses', type=str)
-current_subparser.add_argument('--fabricloader', metavar="Fabric Loader", help="The version of the Fabric Loader this profile uses", type=str)
-current_subparser.add_argument('--fabricinstaller', metavar="Fabric Installer", help="The version of the Fabric installer this profile uses", type=str)
+current_subparser.add_argument('--minecraft', '-m', metavar="Minecraft Version", help='The version of Minecraft this profile uses', type=str)
+current_subparser.add_argument('--fabric-loader', '-l', metavar="Fabric Loader", help="The version of the Fabric Loader this profile uses", type=str)
+current_subparser.add_argument('--fabric-installer', '-i', metavar="Fabric Installer", help="The version of the Fabric installer this profile uses", type=str)
 current_subparser.set_defaults(func = CallbackFromClass(ProfileActions.Create))
 
 current_subparser = profile_parsers.add_parser("copy", help="Copies one profile to another")

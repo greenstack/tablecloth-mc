@@ -60,7 +60,7 @@ Prints all mods that are a part of the profile.
 ### `mod remove`\*
 Removes the specified mod from the profile (but doesn't remove the mod jar itself).
 
-### `mod search`\*
+### `mod search`
 Reports all profiles that have the mod.
 
 ### `mod setver`\*

@@ -543,6 +543,16 @@ class ModActions:
 			for mod in self.GetProfile().ListMods():
 				print(mod)
 
+	class Search(TableclothActionBase):
+		def Perform(self) -> None:
+			profiles = self._config.GetProfileNames()
+			mod = self._argv.modName
+			print("Mod [{}] is found in the following profiles:".format(mod))
+			for profileName in profiles:
+				profile = self._config.GetProfile(profileName)
+				if profile.HasMod(mod):
+					print("  - " + profileName)
+
 mod_parsers = CreateActionGroup(
 	argparser,
 	subparsers,
@@ -562,8 +572,9 @@ current_subparser.set_defaults(func = CallbackFromClass(ModActions.List))
 current_subparser = mod_parsers.add_parser("remove", help="[WIP] Removes the mod from the profile.")
 current_subparser.add_argument("modName", help="The name of the mod to remove.")
 
-current_subparser = mod_parsers.add_parser("find", help="[WIP] Reports each profile that has the mod.")
+current_subparser = mod_parsers.add_parser("search", help="Reports each profile that has the mod.")
 current_subparser.add_argument("modName", help="The name of the mod to search for.")
+current_subparser.set_defaults(func = CallbackFromClass(ModActions.Search))
 
 current_subparser = mod_parsers.add_parser("setver", help="[WIP] Sets the version of the mod.")
 current_subparser.add_argument("modVersion", help="The version of the mod.")

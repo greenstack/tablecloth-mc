@@ -137,7 +137,7 @@ class TableclothProfile:
 		)
 
 		for mod, settings in data["mods"].items():
-			profile.__deserializeMod(mod, settings["version"], settings["enabled"], settings["modrinth"])
+			profile.__deserializeMod(mod, settings)
 
 		profile.SetJarName(data["overrides"]["jar-name"])
 		profile.SetJavaPath(data["overrides"]["java-path"])
@@ -165,12 +165,8 @@ class TableclothProfile:
 			}
 		}
 		
-	def __deserializeMod(self, modName, version, enabled, hostInfo) -> None:
-		self.__mods[modName] = {
-			"version": version,
-			"enabled": enabled,
-			"modrinth": hostInfo,
-		}
+	def __deserializeMod(self, modName, settings) -> None:
+		self.__mods[modName] = settings
 
 	def AddMod(self, modName, version) -> None:
 		self.__mods[modName] = {

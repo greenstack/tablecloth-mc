@@ -65,8 +65,12 @@ Prints all mods that are a part of the profile.
 **Parameters**  
 None.
 
-### `mod remove`\*
+### `mod remove`
 Removes the specified mod from the profile (but doesn't remove the mod jar itself).
+
+**Parameters**
+ - Required:
+   - Mod Name: The name of the mod to remove.
 
 ### `mod search`
 Reports all profiles that have the mod.

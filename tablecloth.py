@@ -578,11 +578,19 @@ class ModActions:
 			# Set up some observer pattern there.
 			self._config.MarkDirty()
 
+	# Lists all mods in the profile.
 	class List(__ModActionBase):
 		def Perform(self) -> None:
 			for mod in self.GetProfile().ListMods():
 				print(mod)
 
+	# Removes the mod from the profile.
+	class Remove(__ModActionBase):
+		def Perform(self) -> None:
+			self.GetProfile().RemoveMod(self._argv.modName)
+			self._config.MarkDirty()
+
+	# Finds all profiles that use the given mod.
 	class Search(TableclothActionBase):
 		def Perform(self) -> None:
 			profiles = self._config.GetProfileNames()
@@ -593,6 +601,7 @@ class ModActions:
 				if profile.HasMod(mod):
 					print("  - " + profileName)
 
+	# Sets the version for the mod. The mod must exist first however.
 	class SetVersion(__ModActionBase):
 		def Perform(self) -> None:
 			self.GetProfile().UpdateMod(self._argv.modName, self._argv.modVersion)
@@ -614,8 +623,9 @@ current_subparser.set_defaults(func = CallbackFromClass(ModActions.Add))
 current_subparser = mod_parsers.add_parser("list", help="Lists all the mods in the profile.")
 current_subparser.set_defaults(func = CallbackFromClass(ModActions.List))
 
-current_subparser = mod_parsers.add_parser("remove", aliases=["rm"], help="[WIP] Removes the mod from the profile.")
+current_subparser = mod_parsers.add_parser("remove", aliases=["rm"], help="Removes the mod from the profile.")
 current_subparser.add_argument("modName", help="The name of the mod to remove.")
+current_subparser.set_defaults(func = CallbackFromClass(ModActions.Remove))
 
 current_subparser = mod_parsers.add_parser("search", help="Reports each profile that has the mod.")
 current_subparser.add_argument("modName", help="The name of the mod to search for.")

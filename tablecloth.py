@@ -39,9 +39,9 @@ import sys
 
 TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
 
-DEFAULT_MINECRAFT_VERSION = "1.19.4"
-DEFAULT_FABRIC_LOADER = "0.14.12"
-DEFAULT_FABRIC_INSTALLER = "0.11.1"
+DEFAULT_MINECRAFT_VERSION = "1.20"
+DEFAULT_FABRIC_LOADER = "0.14.21"
+DEFAULT_FABRIC_INSTALLER = "0.11.2"
 
 # This is only used when no jar name has been provided in the settings or that
 # name is otherwise empty. The default configuration doesn't use this string;

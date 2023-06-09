@@ -23,10 +23,12 @@ At present, these settings can only be modified manually (except current-profile
 
  - **Assume Current Profile**: Sets whether Tablecloth should assume that the currently set profile is the profile to execute on. If false, then each command must identify which profile it's using.
  - **Current Profile**: The name of the current profile.
- - **Launch**\*: Parameters for launching the server using Tablecloth. This feature is a wishlist item that I'm just listing here before I can put it in as an issue on GitHub.
+ - **Launch**: Parameters for launching the server using Tablecloth. Note that what you put here will be passed into the JVM, so be **VERY CAREFUL** with what you put here.
    - **Jar Name**: The name of the Jar to launch. If null, uses the default jar.
 	 - **Java Path**\*: The path to the Java executable. If null, uses the system value for Java.
 	 - **Java Args**: An array of args to pass to Java.
+   - **Min RAM**: The minimum amount of RAM the JVM should use. Defaults to 1G.
+   - **Max RAM**: The maximum amount of RAM the JVM should use. Defaults to 2G.
  - **Validation**\*: Settings to validate the integrity of downloaded files.
    - **Hashes**\*: Ensures that the hashes match those reported by Modrinth.
 	 - **Size**\*: Ensures that the file size matches that reported by Modrinth.

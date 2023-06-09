@@ -28,6 +28,7 @@
 # servers modded with Fabric from the CLI.
 
 import argparse
+import collections.abc
 import copy
 import json
 import os
@@ -168,16 +169,50 @@ class TableclothProfile:
 	def __deserializeMod(self, modName, settings) -> None:
 		self.__mods[modName] = settings
 
-	def AddMod(self, modName, version) -> None:
+	def AddMod(self, modName, version) -> bool:
+		if modName in self.__mods:
+			print("{} is already registered to profile {}!".format(modName, self.__name))
+			return False
+
+		modInfo = ModrinthHostService().GetHostModInfo(
+			self.GetMinecraftVersion(),
+			modName,
+			version
+		)
+
+		if not modInfo:
+			print("Couldn't add the mod")
+			return False
+
 		self.__mods[modName] = {
 			"version": version,
 			"enabled": True,
-			"modrinth": ModrinthHostService().GetHostModInfo(
-				self.GetMinecraftVersion(),
-				modName,
-				version
-			),
+			"modrinth": modInfo,
 		}
+		return True
+
+	def UpdateMod(self, modName, version) -> bool:
+		if not modName in self.__mods:
+			print("Mod {} hasn't been added to this profile!".format(modName))
+			return False
+
+		modInfo = ModrinthHostService().GetHostModInfo(
+			self.GetMinecraftVersion(),
+			modName,
+			version
+		)
+
+		if not modInfo:
+			return
+		
+		self.__mods[modName] = {
+			"version": version,
+			"enabled": self.__mods[modName]["enabled"],
+			"modrinth": modInfo,
+		}
+
+		if not self.__mods[modName]["enabled"]:
+			print("Updated the mod, but it's still disabled")
 
 	def RemoveMod(self, modName) -> None:
 		self.__mods.pop(modName)
@@ -365,8 +400,8 @@ class ModrinthHostService(ModHostService):
 		
 		if not versionResponse.status_code == 200:
 			print("Could not get version data for the mod! HTTP {}".format(versionResponse.status_code))
-			return {}
-
+			return None
+		
 		versionData = versionResponse.json()
 
 		# This helps to find the version ID of the mod.
@@ -384,6 +419,11 @@ class ModrinthHostService(ModHostService):
 	def GetHostModInfo(self, gameVersion: str, modName: str, modVersion: str):
 		modInfo = self.__findModVersion(gameVersion, modName, modVersion)
 
+		if isinstance(modInfo, collections.abc.Sequence):
+			print("Version wasn't found. Valid versions are:")
+			print(modInfo)
+			return None
+		
 		return {
 			"project-id": modInfo["project_id"],
 			"version-id": modInfo["id"],
@@ -553,6 +593,11 @@ class ModActions:
 				if profile.HasMod(mod):
 					print("  - " + profileName)
 
+	class SetVersion(__ModActionBase):
+		def Perform(self) -> None:
+			self.GetProfile().UpdateMod(self._argv.modName, self._argv.modVersion)
+			self._config.MarkDirty()
+
 mod_parsers = CreateActionGroup(
 	argparser,
 	subparsers,
@@ -569,15 +614,17 @@ current_subparser.set_defaults(func = CallbackFromClass(ModActions.Add))
 current_subparser = mod_parsers.add_parser("list", help="Lists all the mods in the profile.")
 current_subparser.set_defaults(func = CallbackFromClass(ModActions.List))
 
-current_subparser = mod_parsers.add_parser("remove", help="[WIP] Removes the mod from the profile.")
+current_subparser = mod_parsers.add_parser("remove", aliases=["rm"], help="[WIP] Removes the mod from the profile.")
 current_subparser.add_argument("modName", help="The name of the mod to remove.")
 
 current_subparser = mod_parsers.add_parser("search", help="Reports each profile that has the mod.")
 current_subparser.add_argument("modName", help="The name of the mod to search for.")
 current_subparser.set_defaults(func = CallbackFromClass(ModActions.Search))
 
-current_subparser = mod_parsers.add_parser("setver", help="[WIP] Sets the version of the mod.")
+current_subparser = mod_parsers.add_parser("set-version", aliases=["sv"], help="Sets the version of the mod.")
+current_subparser.add_argument("modName", help="The name of the mod to set the version for")
 current_subparser.add_argument("modVersion", help="The version of the mod.")
+current_subparser.set_defaults(func = CallbackFromClass(ModActions.SetVersion))
 
 # ==============================================================================
 # END MOD ACTIONS
@@ -669,8 +716,6 @@ def main():
 	if (len(sys.argv) == 1):
 		argparser.parse_args(['-h'])
 		return
-
-	print("Tablecloth Alpha 0.2")
 
 	config = TableclothConfig()
 	args = argparser.parse_args()

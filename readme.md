@@ -46,7 +46,7 @@ None for now.
 ## `launch`
 Starts the Minecraft Server. This will always use the default profile.
 
-## `mod`\*
+## `mod`
 Provides actions for working with mods in a profile.
 
 If the mod name is provided as the only argument, this action will give all relevant data.
@@ -54,8 +54,16 @@ If the mod name is provided as the only argument, this action will give all rele
 ### `mod add`
 Adds the mod to the profile (but doesn't add the jar file yet).
 
+**Parameters**
+ - Required:
+   - Mod Name: The name of the mod to look for.
+   - Mod Version: The version of the mod to use.
+
 ### `mod list`
 Prints all mods that are a part of the profile.
+
+**Parameters**  
+None.
 
 ### `mod remove`\*
 Removes the specified mod from the profile (but doesn't remove the mod jar itself).
@@ -63,8 +71,17 @@ Removes the specified mod from the profile (but doesn't remove the mod jar itsel
 ### `mod search`
 Reports all profiles that have the mod.
 
-### `mod setver`\*
+**Parameters**
+ - Required:
+   - Mod Name: The name of the mod to look for.
+
+### `mod set-version`
 Sets the mod's version.
+
+**Parameters**
+ - Required:
+   - Mod Name: The name of the mod to set the version for.
+   - Mod Version: The version of the mod to use.
 
 ## `profile`
 Manages profiles stored by tablecloth. None of these commands will assume a default profile, regardless of settings.

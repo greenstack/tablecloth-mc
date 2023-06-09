@@ -33,6 +33,7 @@ import copy
 import json
 import os
 import requests
+import shutil
 import subprocess
 import sys
 
@@ -41,6 +42,11 @@ TABLECLOTH_CONFIG_PATH = 'tablecloth.json'
 DEFAULT_MINECRAFT_VERSION = "1.19.4"
 DEFAULT_FABRIC_LOADER = "0.14.12"
 DEFAULT_FABRIC_INSTALLER = "0.11.1"
+
+# This is only used when no jar name has been provided in the settings or that
+# name is otherwise empty. The default configuration doesn't use this string;
+# the default is server.jar
+SERVER_JAR_NAME_PATTERN = "fabric-server-mc.{}-loader.{}-launcher.{}.jar"
 
 CONFIG_PROFILES = "profiles"
 CONFIG_SETTINGS = "settings"
@@ -640,6 +646,54 @@ current_subparser.set_defaults(func = CallbackFromClass(ModActions.SetVersion))
 # END MOD ACTIONS
 # ==============================================================================
 
+class CleanupAction(TableclothActionBase):
+	def __squeakyCleanup(self):
+		if not self._argv.yes:
+				response = ""
+				while response != "y" and response != "n":
+					response = input("This will remove the server jar, .fabric, and mods folders. Continue? Y/N ").lower()
+				if response == "n":
+					print("Aborting cleanup")
+					return
+
+		serverJar = self._config.GetDefaultJarName()
+		profile = self._config.GetCurrentProfile()
+
+		if serverJar == None:
+			serverJar = SERVER_JAR_NAME_PATTERN.format(
+				profile.GetMinecraftVersion(),
+				profile.GetFabricLoaderVersion(),
+				profile.GetFabricInstallerVersion()
+			)
+		if os.path.exists(serverJar):
+			os.remove(serverJar)
+		if os.path.exists("mods"):
+			shutil.rmtree("mods")
+		if os.path.exists(".fabric"):
+			shutil.rmtree(".fabric")
+		return
+
+	def Perform(self) -> None:
+		if self._argv.spotless:
+			self.__squeakyCleanup()
+		else:
+			print("Cleanup is still a work in progress.")
+
+current_subparser = subparsers.add_parser("cleanup", help="Cleans up jars related to removed and disabled mods")
+current_subparser.add_argument("--spotless", help="Clean up all jars installed or created by Tablecloth", action='store_true')
+current_subparser.add_argument("--yes", "-y", help="Skips the prompt when doing a spotless cleanup", action='store_true')
+current_subparser.set_defaults(func=CallbackFromClass(CleanupAction))
+
+class InitAction(TableclothActionBase):
+	def Perform(self) -> None:
+		if os.path.exists("tablecloth.json"):
+			print("tablecloth.json already exists!")
+			return
+		self._config.MarkDirty()
+
+current_subparser = subparsers.add_parser("init", help="Creates the default Tablecloth.py if one doesn't exist.")
+current_subparser.set_defaults(func=CallbackFromClass(InitAction))
+
 class LaunchAction(TableclothActionBase):
 	def __craftLaunchArgs(self) -> list:
 		config = self._config
@@ -729,7 +783,11 @@ def main():
 
 	config = TableclothConfig()
 	args = argparser.parse_args()
-	args.func(args, config)
+	try:
+		args.func(args, config)
+	except EOFError:
+		print("Operation aborted (user input)")
+
 	if args.showResult or args.dry_run:
 		print(json.dumps(config.ToDict(), indent=2))
 	if not args.dry_run and config.IsDirty():

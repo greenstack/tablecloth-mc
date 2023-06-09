@@ -37,11 +37,19 @@ Notes:
  - Any action marked with `*` is a planned feature.
  - If `--profile` isn't provided and `assume-current-profile` is `true`, then the operations will be performed on the `current-profile`. The exception to this is the `profile` actions. If `assume-current-profile` is false, the user must use either `--current-profile` or pass in a specific profile name.
 
-## `cleanup`\*
-Checks for mods that have been removed and deletes them.
+## `cleanup`
+Checks for mods that have been removed and deletes them (eventually). For now,
+this will only work with the `--spotless` flag.
+
+**Parameters**
+ - Optional:
+   - `--spotless`: Deletes the mods and the server jar, not just removed mods. Passing `--yes` or `-y` will skip the prompt.
 
 **Parameters**  
 None for now.
+
+## `init`
+Creates `tablecloth.json` with default configuration. If configuration doesn't exist, then the other commands may create it and run just fine. This command won't do anything if `tablecloth.json` doesn't exist.
 
 ## `launch`
 Starts the Minecraft Server. This will always use the default profile.
@@ -140,13 +148,8 @@ Allows you to set the versions for Minecraft, Fabric Loader, and Fabric Installe
    - `--fabric-loader`, `-l`: The Fabric Loader version to use.
    - `--fabric-installer`, `-i`: The Fabric Installer version to use.
 
-**Parameters**  
-None for now.
-
 ## `config`\*
 Manages various config options. With no arguments, `config` will report the default settings.
-
-###
 
 # Roadmap
 ## Basic Functionality

@@ -51,27 +51,7 @@ SERVER_JAR_NAME_PATTERN = "fabric-server-mc.{}-loader.{}-launcher.{}.jar"
 CONFIG_PROFILES = "profiles"
 CONFIG_SETTINGS = "settings"
 
-CONFIG_MODS = "mods"
-CONFIG_MINECRAFT_VERSION = "minecraft-version"
-CONFIG_FABRIC = "fabric"
-CONFIG_FABRIC_LOADER_VERSION = "loader-version"
-CONFIG_FABRIC_INSTALLER_VERSION = "installer-version"
 CONFIG_SERVER_JAR_NAME = "jar-name"
-
-CONFIG_MOD_NAME = "name"
-CONFIG_MOD_VERSION = "version"
-CONFIG_MOD_MODRINTH = "modrinth"
-CONFIG_MOD_MODRINTH_PROJECT_ID = "project-id"
-CONFIG_MOD_MODRINTH_VERSION_ID = "version-id"
-CONFIG_MOD_MODRINTH_DOWNLOAD_URL = "download-url"
-CONFIG_MOD_MODRINTH_FILENAME = "filename"
-CONFIG_MOD_MODRINTH_HASHES = "hashes"
-CONFIG_MOD_MODRINTH_HASHES_SHA512 = "sha512"
-CONFIG_MOD_MODRINTH_HASHES_SHA1 = "sha1"
-
-MODRINTH_API_BASE = "https://api.modrinth.com/v2/"
-MODRINTH_PROJECT_API = MODRINTH_API_BASE + "project/{}"
-MODRINTH_VERSION_API = MODRINTH_API_BASE + "project/{}/version"
 
 class TableclothArgparseFactory:
 	def __init__(self, argparser):
@@ -294,6 +274,7 @@ class TableclothConfig:
 		profiles = {}
 		for profile, data in config[CONFIG_PROFILES].items():
 			profiles[profile] = TableclothProfile.FromDict(profile, data)
+		# We pop it to allow us to put in the class-specified versions properly.
 		config.pop(CONFIG_PROFILES)
 		config[CONFIG_PROFILES] = profiles
 		return config
@@ -392,13 +373,12 @@ class ModrinthHostService(ModHostService):
 		super().__init__("https://api.modrinth.com/v2/")
 
 	def __findModVersion(self, gameVersion: str, modName: str, modVersion: str) -> dict:
-		#TODO: Want to use Modrinth's search api. Should let us get this easier.
 		versionResponse = requests.get(
 			self.GetApiUrl() + "project/" + modName + "/version",
 			params = {
-				# TODO: This isn't working - gameVersion isn't
-				# being properly filtered. Can't figure out why.
+				# Filter results to only those supported by Fabric.
 				'loaders' : '["fabric"]',
+				# Filter results to only the game version.
 				'game_versions': '["{}"]'.format(gameVersion),
 			})
 		
@@ -429,7 +409,7 @@ class ModrinthHostService(ModHostService):
 
 		if isinstance(modInfo, collections.abc.Sequence):
 			if len(modInfo) == 0:
-				print("No versions supporting this profile's Minecraft version ({}) were found!".format(gameVersion))
+				print("No versions supporting this profile's Minecraft version ({}) were found or the mod doesn't support Fabric".format(gameVersion))
 				return None
 			else:
 				print("Version wasn't found. Valid versions are:")
@@ -692,8 +672,8 @@ current_subparser.set_defaults(func=CallbackFromClass(CleanupAction))
 
 class InitAction(TableclothActionBase):
 	def Perform(self) -> None:
-		if os.path.exists("tablecloth.json"):
-			print("tablecloth.json already exists!")
+		if os.path.exists(TABLECLOTH_CONFIG_PATH):
+			print(TABLECLOTH_CONFIG_PATH + " already exists!")
 			return
 		self._config.MarkDirty()
 

@@ -3,7 +3,7 @@ Tablecloth MC (or more simply, just "Tablecloth") is a single Python file
 designed to help you manage your [Fabric](https://fabricmc.net)-modded
 [Minecraft](https://www.minecraft.net/) server from the CLI.
 
-Tablecloth is still in **very early alpha**.
+Tablecloth is still in **early alpha**.
 
 # Installation
 I recommend that you download the raw `tablecloth.py` file and place it in the
@@ -17,6 +17,23 @@ however.
 After you run Tablecloth for the first time, it will create a file called
 `tablecloth.json`. This is the configuration file that Tablecloth uses. You can
 edit it yourself or you can use Tablecloth to manage it as well.
+
+# Requirements
+Requires Python 3.
+
+# Usage
+If in Linux, you can just run Tablecloth as follows: `./tablecloth.py`. Note that
+at present, Tablecloth only supports downloading mods from [Modrinth](https://modrinth.com/). Support for CurseForge isn't planned because it doesn't currently provide API access without an API key, which can be hard to keep secret in this kind of project.
+
+# Quick-Start Guide
+To install a mod, download required files, and launch the server, do the following:
+
+```
+./tablecloth.py init
+./tablecloth.py mod add lithium mc1.20-0.11.2
+./tablecloth.py serve-up
+./tablecloth.py launch
+```
 
 # Settings
 At present, these settings can only be modified manually (except current-profile). Items with \* haven't been implemented yet.
@@ -156,10 +173,8 @@ Manages various config options. With no arguments, `config` will report the defa
 # Roadmap
 ## Basic Functionality
 These features are needed to say that Tablecloth is in the beta stage.
- - Profiles (done)
  - Download mod dependencies
  - `tablecloth.lock.json`: A file that changes are committed to so users have a fallback if server configuration goes haywire.
- - Launch the server jar through Tablecloth. (done)
 
 ## Future Features
  - Figure out how to get most current version of Minecraft for default config

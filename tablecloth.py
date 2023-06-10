@@ -398,10 +398,8 @@ class ModrinthHostService(ModHostService):
 			params = {
 				# TODO: This isn't working - gameVersion isn't
 				# being properly filtered. Can't figure out why.
-				"query": {
-					"loaders": ["fabric"],
-					"game_versions": [gameVersion],
-				}
+				'loaders' : '["fabric"]',
+				'game_versions': '["{}"]'.format(gameVersion),
 			})
 		
 		if not versionResponse.status_code == 200:
@@ -409,13 +407,17 @@ class ModrinthHostService(ModHostService):
 			return None
 		
 		versionData = versionResponse.json()
-
+		
 		# This helps to find the version ID of the mod.
-		if len(versionData) == 1:
+		if (len(versionData) == 1 and
+				"version_number" in versionData[0] and
+				versionData[0]["version_number"] == modVersion):
 			return versionData[0]
 		else:
 			versionList = []
 			for versionInfo in versionData:
+				# Grab the first version found. Modrinth returns mod versions from
+				# newest to oldest (this is rare, but does happen).
 				if versionInfo["version_number"] == modVersion:
 					return versionInfo
 				else:
@@ -426,9 +428,13 @@ class ModrinthHostService(ModHostService):
 		modInfo = self.__findModVersion(gameVersion, modName, modVersion)
 
 		if isinstance(modInfo, collections.abc.Sequence):
-			print("Version wasn't found. Valid versions are:")
-			print(modInfo)
-			return None
+			if len(modInfo) == 0:
+				print("No versions supporting this profile's Minecraft version ({}) were found!".format(gameVersion))
+				return None
+			else:
+				print("Version wasn't found. Valid versions are:")
+				print(modInfo)
+				return None
 		
 		return {
 			"project-id": modInfo["project_id"],
